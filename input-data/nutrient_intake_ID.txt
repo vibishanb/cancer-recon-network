@@ -1,21 +1,36 @@
 IDs: Names
-2044: Cellotetraose (Cellohexaose, Cellopentaose, Cellotriose)
-2060: D-Arabinose (L-Arabinose, Arabinose, L-Arabinopyranose, L-Arabinofuranose)
-2061: D-Fructose (Fructose)
-2064: D-Galactose
-2065: D-Galacturonate
-2068: D-Glucose (Glucose)
-2069: D-Glucuronic acid (D-Glucuronate)
-2072: D-Mannose (Mannose)
-2074: D-Ribose (Ribose)
-2079: D-Xylose (Xylose)
-2082: Dextrin (Maltotriose, Maltodextrin, Maltohexaose, Maltotetraose, Maltooligosaccharide)
-2094: FOS (Fructooligosaccharide)
-2098: Glycerol
-2149: L-Rhamnose (Rhamnose, D-Rhamnose)
-2161: Maltose
-2172: N-Acetyl-D-Glucosamine (N-Acetylglucosamine)
-2174: N-Acetylgalactosamine (N-Acetyl-D-galactosamine)
-2242: XOS (Xylooligosaccharide)
-2157: Lactose
-2206: Raffinose
+C00031: Glucose
+C00072: Ascorbic acid
+C00025: Glu
+C00041: Ala
+C00042: Succinate
+C00186: Lactate
+C00661: Glyceraldehyde-3-phosphate
+C00047: Lys
+C00183: Val
+C00026: Ketoglutaric acid
+C00049: Asp
+C00123: Leu
+C00037: Gly
+C01384: Maleic acid
+C02170: Methylmalonic acid
+C00022: Pyruvic acid
+C00407: Ile
+C00082: Tyr
+C00148: Pro
+C00188: Thr
+C00327: Citrulline
+C00079: Phe
+C00065: Ser
+C00711: Malate
+C00073: Met
+C00064: Gln
+C00135: His
+C00062: Arg
+C00078: Trp
+C00158: Citrate
+C00383: Malonate
+C00152: Asn
+C00092: G6P
+C00103: G1P
+C00491: Cystine
