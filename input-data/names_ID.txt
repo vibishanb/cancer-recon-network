@@ -1,9 +1,5 @@
 IDs: Names
 1: Cell type 1
-2: Cell type 2
-3: Cell type 3
-4: Cell type 4
-5: Cell type 5
 C00031: Glucose
 C00072: Ascorbic acid
 C00025: Glu
