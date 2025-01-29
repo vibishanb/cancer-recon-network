@@ -1,3 +1,4 @@
+# %% [markdown]
 # # Trophic model for the gut microbiome
 # The human gut microbial community is complex because of 3 reasons: (1) many microbial species ($\approx$ 570); (2) many metabolites involved ($\approx$ 244); and (3) many microbe-metabolite interactions/links (>4400). Of all types of microbe-metabolite interactions/links, the cross-feeding makes the system more complicated to interpret. Previously, a literature-curated interspecies network of the human gut microbiota, called [NJS16](https://www.nature.com/articles/ncomms15393) is reported. This is an extensive data resource composed of ∼570 microbial species and 3 human cell types metabolically interacting through >4,400 small-molecule transport and macromolecule degradation events.
 # 
@@ -49,17 +50,16 @@ def figure_size_setting(WIDTH):
 ########### import the pickled file containing all processed data which are useful for simulations (the processing is
 ########### done in "Trophic_model_for_gut_data_processing.ipynb")
 import pickle
-# pickle_in = open("cancer_network.pickle","rb")
-# net, i_intake, names = pickle.load(pickle_in)
-net, i_intake, names = pd.read_pickle("cancer_network.pickle")
+pickle_in = open("cancer_network.pickle","rb")
+net, i_intake, names = pickle.load(pickle_in)
 # i_selfish = 0
 
-# pickle_in = open("data.pickle","rb")
-# celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, ic_metabolome_ID, ic_metabolome = pickle.load(pickle_in)
-celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, ic_metabolome_ID, ic_metabolome = pd.read_pickle("data.pickle")
+pickle_in = open("data.pickle","rb")
+celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, ic_metabolome_ID, ic_metabolome = pickle.load(pickle_in)
 
 
-# Create maps of celltypes and metabolites to their reduced matrix forms
+# %% [markdown]
+# ## Create maps of celltypes and metabolites to their reduced matrix forms
 
 # %%
 i_nonzero_celltypes = net['celltypes_ID'].unique()
@@ -86,7 +86,7 @@ net = net_reduced.copy()
 net_temp = net.copy()
 net['edgeType'][net['edgeType']==5] = 2
 net_temp['edgeType'][net_temp['edgeType']==5] = 3
-net = pd.concat([net, net_temp]).drop_duplicates() #net.append(net_temp).drop_duplicates()
+net = net.append(net_temp).drop_duplicates()
 net_ori = net.copy()
 
 celltype_ID_reduced = df_celltypes.reindex(celltype_ID).values.flatten()
@@ -104,7 +104,8 @@ i_intake = i_intake_reduced[~np.isnan(i_intake_reduced)].astype(int)
 
 
 
-# Run the simulation with reduced matrix forms for one individual
+# %% [markdown]
+# ## Run the simulation with reduced matrix forms for one individual
 
 # %%
 ################################# Predict metabolome from individual's metagenome.
@@ -153,7 +154,7 @@ def Ain_out(ct_hyp, x, net):
     # in_degree = m2b.sum(1)
     # in_degree[in_degree==0]=1e6
     # m2b = m2b / numpy.matlib.repmat(in_degree[:,np.newaxis], 1, MAX_ID_celltypes)
-    ct_hyp_repmat = numpy.matlib.repmat(np.array(celltypefreq), MAX_ID_metabolites, 1)
+    ct_hyp_repmat = numpy.matlib.repmat(celltypefreq[np.newaxis,:], MAX_ID_metabolites, 1)
     m2b = m2b * ct_hyp_repmat # Uptake is proportional to cell type relative abundance
     m2b = np.asarray([i*j for i, j in zip(m2b, x.to_numpy(dtype=float))]) # Relative amount of nutrient taken up
     m2b = m2b/in_degree
@@ -207,7 +208,7 @@ def pred_error(ct_hyp, net, numLevels_max, f, x, ec_real):
     first three is used to compute the net gain in the intracellular metabolome predicted by the model "ic_pred" and compare it with the 
     experimentally measured net gain in intracellular metabolome "ic_real".
     '''
-    x = np.clip(x, 0, np.inf)
+
     m2b, b2m = Ain_out(ct_hyp, x, net)
     m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(f, m2b, b2m, numLevels_max)
     
@@ -263,8 +264,7 @@ def run_network_model(f, col_name):
     diet = pd.read_csv('../input-data/diet.csv')
     diet = diet[np.isin(diet['metabolites_ID'], ic_metabolome_ID)]
     x = diet.loc[:, col_name]
-    x = np.clip(x, 0, np.inf) # Initial absolute abundances of metabolites in the diet
-    # x = x/x.sum() # Initial relative abundances of metabolites in the diet
+    x = x/x.sum() # Initial relative abundances of metabolites in the diet
 
 
     ######## Compute matrices involving the metabolite consumption and generation:
@@ -276,14 +276,13 @@ def run_network_model(f, col_name):
     # minimize the logarithmic error between experimentally measured metagenome and predicted metagenome computed 
     # from the model for a certain nutrient intake.
     fun = lambda ct_hyp: pred_error(ct_hyp, net, numLevels_max, f, x, ec_real)
-    cellnum_max = 0.24e6 # Estimated cell number at confluence in a 24-well plate (https://www.thermofisher.com/in/en/home/references/gibco-cell-culture-basics/cell-culture-protocols/cell-culture-useful-numbers.html)
-
-    bnds = ((1e4, cellnum_max), ) * len(ct0) # Initial seeding density in Immanuel et al. was 10000
-    constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - cellnum_max}
+    bnds = ((0, 1), ) * len(ct0)
+    constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - 1.}
     # res = minimize(fun, ct0, method='SLSQP', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
     # res = minimize(fun, ct0, method='Nelder-Mead', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
     res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
     print(res)
+
     ######## As long as the optimized nutrient intake is found by using the above optimization solver, the
     # optimized nutrient intake "res.x" is used to generate the predict metagenome and metabolome. They are
     # visually and statistically compared to the experimentally measured metagenome and metabolome.
@@ -301,29 +300,29 @@ def run_network_model(f, col_name):
     # ax.set_xlabel('predicted')
     # ax.set_ylabel('experimentally observed')
     # ax.set_title('Intracellular metabolome comparison')
-    # fig.savefig('../figures/relative-abund-one-celltype-static-net/ic-pred-correlation-'+figname+'.png', dpi=300.)
+    # fig.savefig('../figures/one-celltype-static-net/ic-pred-correlation-'+figname+'.png', dpi=300.)
 
     met_levels, met_leftover_levels = calc_metabolome(x, m2b, m2m_total, numLevels_max)
     # metabolome_measured = np.zeros((MAX_ID_metabolites,))
     metabolome_measured = ec_metabolome[col_name].to_numpy(dtype=float)
     # metabolome_measured = metabolome_measured/metabolome_measured.sum()
-    #metabolome_measured[metabolome_ID.values] = -0.58888854, -0.55040201metabolome.iloc[:,pa]
+    #metabolome_measured[metabolome_ID.values] = metabolome.iloc[:,pa]
     # metabolome_measured[metabolome_ID] = metabolome.iloc[:,pa]
-    metabolome_pred = met_levels + met_leftover_levels.ravel() #np.dot(m2m_total, x_full)
+    metabolome_pred = met_levels + met_leftover_levels #np.dot(m2m_total, x_full)
     #metabolome_pred = np.dot(m2m_total, x_full)
     i_common = np.where(metabolome_measured * metabolome_pred > 1e-5)[0]
-    metabolome_pred_common = metabolome_pred[i_common] #/ np.sum(metabolome_pred[i_common])
-    metabolome_measured_common = metabolome_measured[i_common] #/ np.sum(metabolome_measured[i_common])
+    metabolome_pred_common = metabolome_pred[i_common] / np.sum(metabolome_pred[i_common])
+    metabolome_measured_common = metabolome_measured[i_common] / np.sum(metabolome_measured[i_common])
 
     #### Metabolome comparison
     fig, ax = plt.subplots()
     ax.loglog(metabolome_pred_common, metabolome_measured_common, 'ko')
-    # ax.plot([1e-5, 1], [1e-5, 1],'k-')
+    ax.plot([1e-5, 1], [1e-5, 1],'k-')
     ax.set_aspect('equal')
     ax.set_xlabel('predicted')
     ax.set_ylabel('experimentally observed')
     ax.set_title('Extracellular metabolome comparison')
-    fig.savefig('../figures/absolute-abund-one-celltype-static-net/ec-pred-correlation-'+str(f)+'-'+col_name+'.png', dpi=300.)
+    # fig.savefig('../figures/one-celltype-static-net/ec-pred-correlation-'+figname+'.png', dpi=300.)
     
 
     # ic_corr = pearsonr(ic_pred[ic_real>0], ic_real[ic_real>0])[0]
@@ -350,6 +349,15 @@ for i in range(len(f_arr)):
     for j in range(len(celline_names)):
         ec_corr[i, j], ct_full[i, j] = run_network_model(f_arr[i], celline_names[j])
 
+# %%
+plt.imshow(ic_corr.T, cmap='viridis')
+plt.colorbar()
+plt.xticks(ticks=np.arange(len(f_arr)), labels=f_arr.round(decimals=2), rotation=45)
+plt.yticks(ticks=[0, 1], labels=celline_names)
+plt.title('Pearsons r: Intracellular conc')
+plt.xlabel('Byproduct fraction, f')
+plt.ylabel('Cell line')
+plt.savefig('../figures/one-celltype-static-net/intracellular-relative-conc-pearsonr.png', dpi=300.)
 
 # %%
 plt.imshow(ec_corr.T, cmap='viridis')
@@ -359,7 +367,7 @@ plt.yticks(ticks=[0, 1], labels=celline_names)
 plt.title('Pearsons r: Extracellular conc')
 plt.xlabel('Byproduct fraction, f')
 plt.ylabel('Cell line')
-plt.savefig('../figures/absolute-abund-one-celltype-static-net/extracellular-relative-conc-pearsonr.png', dpi=300.)
+plt.savefig('../figures/one-celltype-static-net/extracellular-relative-conc-pearsonr.png', dpi=300.)
 
 # %%
 plt.imshow(ct_full.T, cmap='viridis')
@@ -369,7 +377,100 @@ plt.yticks(ticks=[0, 1], labels=celline_names)
 plt.title('Cell type abundance')
 plt.xlabel('Byproduct fraction, f')
 plt.ylabel('Cell line')
-plt.savefig('../figures/absolute-abund-one-celltype-static-net/celltype-abundance.png', dpi=300.)
+plt.savefig('../figures/one-celltype-static-net/celltype-abundance.png', dpi=300.)
 
 ####################################################################
+
+
+# %%
+# f_byproduct = 0.9
+f = 0.1 * np.ones((MAX_ID_celltypes,1))
+col_name = 'U87MG'
+# f[i_selfish] = 0.0;  # The byproduct/leakage fraction f for celltypes that don't generate byproducts is set as 0.
+
+numLevels_max = 1
+
+######## Pull out experimentally measured intracellular metabolite net gain for one cell type
+# pa = 5; 
+# ic_real = ic_metabolome[col_name].to_numpy(dtype=np.float64)
+# ic_real = ic_real/ic_real.sum() # Relative intracellular metabolite abundances
+ct0 = celltypefreq.to_numpy() # Prior cell type relative frequencies
+ec_real = ec_metabolome[col_name].to_numpy(dtype=float)
+# b_real[metagenome_ID] = metagenome.iloc[:,pa] / np.sum(metagenome.iloc[:,pa])
+
+######## Assign diet using 0h extracellular measurement from Immanuel et al.
+diet = pd.read_csv('../input-data/diet.csv')
+diet = diet[np.isin(diet['metabolites_ID'], ic_metabolome_ID)]
+x = diet.loc[:, col_name]
+x = x/x.sum() # Initial relative abundances of metabolites in the diet
+
+
+######## Compute matrices involving the metabolite consumption and generation:
+m2b, b2m = Ain_out(ct0, x, net)
+m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(f, m2b, b2m, numLevels_max)
+#m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(i_nonzero_celltypes, i_nonzero_metabolites, f, m2b, b2m, numLevels_max)
+
+######## The model is converted into an optimization problem where the nutrient intake is constantly changed to
+# minimize the logarithmic error between experimentally measured metagenome and predicted metagenome computed 
+# from the model for a certain nutrient intake.
+fun = lambda ct_hyp: pred_error(ct_hyp, net, numLevels_max, f, x, ec_real)
+bnds = ((0, 1), ) * len(ct0)
+constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - 1.}
+# res = minimize(fun, ct0, method='SLSQP', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
+# res = minimize(fun, ct0, method='Nelder-Mead', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
+res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+print(res)
+
+######## As long as the optimized nutrient intake is found by using the above optimization solver, the
+# optimized nutrient intake "res.x" is used to generate the predict metagenome and metabolome. They are
+# visually and statistically compared to the experimentally measured metagenome and metabolome.
+ct_full = np.zeros((MAX_ID_celltypes,))
+ct_full = res.x
+# ic_pred = np.matmul(m2b_total, ct_full)
+# ec_real = ec_metabolome['NSP']
+
+# figname = str(f)+'-'+col_name
+# #### Metagenome comparison
+# fig, ax = plt.subplots()
+# ax.loglog(ic_pred, ic_real, 'ko')
+# # ax.plot([1e-5, 1], [1e-5, 1],'k-')
+# ax.set_aspect('equal')
+# ax.set_xlabel('predicted')
+# ax.set_ylabel('experimentally observed')
+# ax.set_title('Intracellular metabolome comparison')
+# fig.savefig('../figures/one-celltype-static-net/ic-pred-correlation-'+figname+'.png', dpi=300.)
+
+met_levels, met_leftover_levels = calc_metabolome(x, m2b, m2m_total, numLevels_max)
+# metabolome_measured = np.zeros((MAX_ID_metabolites,))
+metabolome_measured = ec_metabolome[col_name].to_numpy(dtype=float)
+# metabolome_measured = metabolome_measured/metabolome_measured.sum()
+#metabolome_measured[metabolome_ID.values] = metabolome.iloc[:,pa]
+# metabolome_measured[metabolome_ID] = metabolome.iloc[:,pa]
+metabolome_pred = met_levels + met_leftover_levels #np.dot(m2m_total, x_full)
+#metabolome_pred = np.dot(m2m_total, x_full)
+i_common = np.where(metabolome_measured * metabolome_pred > 1e-5)[0]
+metabolome_pred_common = metabolome_pred[i_common] / np.sum(metabolome_pred[i_common])
+metabolome_measured_common = metabolome_measured[i_common] / np.sum(metabolome_measured[i_common])
+
+#### Metabolome comparison
+fig, ax = plt.subplots()
+ax.loglog(metabolome_pred_common, metabolome_measured_common, 'ko')
+ax.plot([1e-5, 1], [1e-5, 1],'k-')
+ax.set_aspect('equal')
+ax.set_xlabel('predicted')
+ax.set_ylabel('experimentally observed')
+ax.set_title('Extracellular metabolome comparison')
+# fig.savefig('../figures/one-celltype-static-net/ec-pred-correlation-'+figname+'.png', dpi=300.)
+
+
+# ic_corr = pearsonr(ic_pred[ic_real>0], ic_real[ic_real>0])[0]
+ec_corr = pearsonr(metabolome_pred_common, metabolome_measured_common)[0]
+print('-------------------------------------------------------------------------------------------------------------')
+# print('(Correlation coefficient, P-value) of the correlation between predicted and experimentally measured intracellular metabolome:')
+# print(pearsonr(ic_pred[ic_real>0], ic_real[ic_real>0]))
+print('(Correlation coefficient, P-value) of the correlation between predicted and experimentally measured extracellular metabolome:')
+print(pearsonr(metabolome_pred_common, metabolome_measured_common))
+
+
+
 # %%
