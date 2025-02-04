@@ -335,7 +335,7 @@ def run_network_model(f, col_name):
 
 # %%
 ###### Actually run the model for whatever replicates we have
-f_arr = np.linspace(0, 1, 10)
+f_arr = np.linspace(0.1, 1, 10)
 celline_names = ['U87MG', 'NSP']
 
 # ic_corr = np.zeros((len(f_arr), len(celline_names)))
@@ -448,3 +448,5 @@ plt.savefig('../figures/one-celltype-static-net/relative-abundance/celltype-abun
 
 
 # # %%
+
+# %%

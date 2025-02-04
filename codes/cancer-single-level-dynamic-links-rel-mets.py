@@ -414,9 +414,9 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori, f, col_name):
     
     # ba_pred = np.dot(m2b_total, x_full)
     
-    pred_error1 = np.mean(log_list_aveDiet[:,0])
+    # pred_error1 = np.mean(log_list_aveDiet[:,0])
     pred_error2 = np.mean(log_list_aveDiet[:,1])
-    pred_error3 = np.sum(np.abs(x))
+    # pred_error3 = np.sum(np.abs(x))
     pred_error4 = np.mean(numMetabolites_list)
     hyper_reg = 0.001
     pred_errorTotal = pred_error2 + hyper_reg * pred_error3 - (pred_error4 - 20) * 0.003 # with reward
