@@ -150,7 +150,8 @@ def Ain_out(ct_hyp, x, net):
     # in_degree = m2b.sum(1)
     # in_degree[in_degree==0]=1e6
     # m2b = m2b / numpy.matlib.repmat(in_degree[:,np.newaxis], 1, MAX_ID_celltypes)
-    ct_hyp_repmat = numpy.matlib.repmat(ct_hyp[np.newaxis,:], MAX_ID_metabolites, 1)
+    ct_freq = ct_hyp/ct_hyp.sum()
+    ct_hyp_repmat = numpy.matlib.repmat(ct_freq[np.newaxis,:], MAX_ID_metabolites, 1)
     m2b = m2b * ct_hyp_repmat # Uptake is proportional to cell type relative abundance
     m2b = np.asarray([i*j for i, j in zip(m2b, x.to_numpy(dtype=float))]) # Relative amount of nutrient taken up
     m2b = m2b/in_degree
@@ -278,8 +279,8 @@ def run_network_model(f, col_name, net):
     constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - cellnum_max}
     # res = minimize(fun, ct0, method='SLSQP', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
     # res = minimize(fun, ct0, method='Nelder-Mead', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
-    res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
-    print(res)
+    res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+    # print(res)
 
     ######## As long as the optimized nutrient intake is found by using the above optimization solver, the
     # optimized nutrient intake "res.x" is used to generate the predict metagenome and metabolome. They are
@@ -409,9 +410,9 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori, f, col_name):
         log_list_aveDiet[0, 1] = np.mean(np.abs(np.log10(metabolome_pred_common+1e-6) - np.log10(metabolome_measured_common+1e-6)))
 
     else:
-        corr_list_aveDiet[0, 0] = -1
+        # corr_list_aveDiet[0, 0] = -1
         corr_list_aveDiet[0, 1] = -1
-        log_list_aveDiet[0, 0] = 5
+        # log_list_aveDiet[0, 0] = 5
         log_list_aveDiet[0, 1] = 5
             
     # x_full = np.zeros((MAX_ID_metabolites,))
@@ -419,7 +420,7 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori, f, col_name):
     
     # ba_pred = np.dot(m2b_total, x_full)
     
-    pred_error1 = np.mean(log_list_aveDiet[:,0])
+    # pred_error1 = np.mean(log_list_aveDiet[:,0])
     pred_error2 = np.mean(log_list_aveDiet[:,1])
     pred_error3 = np.sum(np.abs(x))
     pred_error4 = np.mean(numMetabolites_list)
@@ -431,111 +432,107 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori, f, col_name):
 
 # %%
 ###### Actually run the model for whatever replicates we have
-# f_arr = np.linspace(0, 1, 10)
-f = 0.3
-cell_line_names = ['U87MG', 'NSP']
-
-
-metabolome = ec_metabolome.iloc[:, 2:].to_numpy()
-error_list = []
-current_step_list = []
-pos_x_list = []
-metID_list = []
-microbeID_list = []
-prior_list = []
-net_links_added = []
-
-for cl in cell_line_names:
-    m2b, b2m = compute_met_matrices(f, cl)
-    ######## Keep a record of the original network
-    m2b_ori = (m2b!=0).astype(int).copy()
-    b2m_ori = (b2m!=0).astype(int).copy()
-    x_ori = np.concatenate([m2b_ori.flatten(), b2m_ori.flatten()])
-    net_ori = net.copy()
-
-
-    fun = lambda x: pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori, f, cl)
-    max_links = m2b.shape[0]*m2b.shape[1]
-    x = x_ori.copy()
-    error_before, bias_metabolome, bias_metagenome = fun(x)
-    bias_metabolome_ori = bias_metabolome.copy()
-    prior_prob1 = np.matlib.repmat(np.exp(3 * (bias_metagenome) / metabolome.shape[1])[np.newaxis, :], m2b.shape[0], 1) * np.matlib.repmat(np.exp(3 * bias_metabolome_ori / metabolome.shape[1])[:, np.newaxis], 1, m2b.shape[1])
-    prior_prob2 = np.matlib.repmat(np.exp(3 * bias_metabolome_ori / metabolome.shape[1])[:, np.newaxis], 1, m2b.shape[1])
-    prior_prob = np.concatenate([prior_prob1.flatten(), prior_prob2.flatten()]) + 0.1
-    prior_prob = prior_prob / np.sum(prior_prob)
-    print('The original error is', error_before)
-    error_list.append(error_before)
-
-    inverseKT = 5000
-    Twindow = 500
-    numStepsNotAdded = 0
-    error_window = []
-    for i in range(10000):
-        if i%50==0:
-            print(i)
-        i_x = np.random.choice(np.where(x==0)[0], 1, p=prior_prob[x==0]/np.sum(prior_prob[x==0]))[0]
-        x[i_x] = 1
-        #x[i_x] = 1 - x[i_x]
-        error_after, bias_metabolome, bias_metagenome = fun(x)
-        ## Consumption links:
-        prior_prob1 = np.matlib.repmat(np.exp(3 * (bias_metagenome) / metabolome.shape[1])[np.newaxis, :], m2b.shape[0], 1) * np.matlib.repmat(np.exp(3 * bias_metabolome_ori / metabolome.shape[1])[:, np.newaxis], 1, m2b.shape[1])
-        ## Production links:
-        prior_prob2 = np.matlib.repmat(np.exp(3 * bias_metabolome_ori / metabolome.shape[1])[:, np.newaxis], 1, m2b.shape[1])
-        prior_prob = np.concatenate([prior_prob1.flatten(), prior_prob2.flatten()]) + 0.1
-        prior_prob = prior_prob / np.sum(prior_prob)
-
-        if np.random.uniform(0,1,1)[0] <= np.min([1, np.exp((inverseKT)*(error_before - error_after))]): 
-            error_before = error_after
-            print('accepted, error is', error_before)
-            error_list.append(error_before)
-            current_step_list.append(i)
-            pos_x_list.append(i_x)
-            prior_list.append(prior_prob[i_x])
-            if i_x < max_links:
-                row_num = i_x // m2b_ori.shape[1]
-                col_num = i_x - row_num * m2b_ori.shape[1]
-            elif i_x >= max_links:
-                i_x = i_x - m2b_ori.shape[0] * m2b_ori.shape[1]
-                row_num = i_x // b2m_ori.shape[1]
-                col_num = i_x - row_num * b2m_ori.shape[1]
-            metID_list.append(row_num)
-            microbeID_list.append(col_num)
-            numStepsNotAdded = 0
-        else:  ## not accepted   
-            x[i_x] = 0
-            numStepsNotAdded += 1
-            #x[i_x] = 1 - x[i_x]
-        error_window.append(error_before)
-        if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow) / inverseKT)):
-            break
-    ######## Convert x to net structure:
-    a = np.array(metID_list)
-    b = np.array(microbeID_list)
-    c = np.ones([len(metID_list)], dtype = int) * 3
-    c[np.where(np.array(pos_x_list) < max_links)[0]] = 2
-    net_added = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c})
-    net_new = pd.concat([net_ori, net_added])
-
-    print('The original network has ',len(net_ori),'links')
-    print('The improved network has ',len(net_new),'links')
-
-    net_links_added.append(net_new)
-
-    ######### Change in error with additions
-    plt.figure()
-    plt.plot(error_list)
-    plt.ylabel('error')
-    plt.xlabel('number of links added')
-
-###### Evaluate performance with links added
-# %%
 f_arr = np.linspace(0.1, 1, 10)
+# f = 0.3
+cell_line_names = ['U87MG', 'NSP']
 ec_corr = np.zeros((len(f_arr), len(cell_line_names)))
 ct_full = ec_corr.copy()
 
 for i, f in enumerate(f_arr):
-    for j, net in enumerate(net_links_added):
+    for j, cl in enumerate(cell_line_names):
+        metabolome = ec_metabolome.loc[:, cl].to_numpy()
+        error_list = []
+        current_step_list = []
+        pos_x_list = []
+        metID_list = []
+        microbeID_list = []
+        prior_list = []
+        net_links_added = []
+
+        m2b, b2m = compute_met_matrices(f, cl)
+        ######## Keep a record of the original network
+        m2b_ori = (m2b!=0).astype(int).copy()
+        b2m_ori = (b2m!=0).astype(int).copy()
+        x_ori = np.concatenate([m2b_ori.flatten(), b2m_ori.flatten()])
+        net_ori = net.copy()
+
+
+        fun = lambda x: pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori, f, cl)
+        max_links = m2b.shape[0]*m2b.shape[1]
+        x = x_ori.copy()
+        error_before, bias_metabolome, bias_metagenome = fun(x)
+        bias_metabolome_ori = bias_metabolome.copy()
+        prior_prob1 = np.matlib.repmat(np.exp(3 * (bias_metagenome) / metabolome.shape[1])[np.newaxis, :], m2b.shape[0], 1) * np.matlib.repmat(np.exp(3 * bias_metabolome_ori / metabolome.shape[1])[:, np.newaxis], 1, m2b.shape[1])
+        prior_prob2 = np.matlib.repmat(np.exp(3 * bias_metabolome_ori / metabolome.shape[1])[:, np.newaxis], 1, m2b.shape[1])
+        prior_prob = np.concatenate([prior_prob1.flatten(), prior_prob2.flatten()]) + 0.1
+        prior_prob = prior_prob / np.sum(prior_prob)
+        print('The original error is', error_before)
+        error_list.append(error_before)
+
+        inverseKT = 5000
+        Twindow = 500
+        numStepsNotAdded = 0
+        error_window = []
+        for i in range(10000):
+            if i%50==0:
+                print(i)
+            i_x = np.random.choice(np.where(x==0)[0], 1, p=prior_prob[x==0]/np.sum(prior_prob[x==0]))[0]
+            x[i_x] = 1
+            #x[i_x] = 1 - x[i_x]
+            error_after, bias_metabolome, bias_metagenome = fun(x)
+            ## Consumption links:
+            prior_prob1 = np.matlib.repmat(np.exp(3 * (bias_metagenome) / metabolome.shape[1])[np.newaxis, :], m2b.shape[0], 1) * np.matlib.repmat(np.exp(3 * bias_metabolome_ori / metabolome.shape[1])[:, np.newaxis], 1, m2b.shape[1])
+            ## Production links:
+            prior_prob2 = np.matlib.repmat(np.exp(3 * bias_metabolome_ori / metabolome.shape[1])[:, np.newaxis], 1, m2b.shape[1])
+            prior_prob = np.concatenate([prior_prob1.flatten(), prior_prob2.flatten()]) + 0.1
+            prior_prob = prior_prob / np.sum(prior_prob)
+
+            if np.random.uniform(0,1,1)[0] <= np.min([1, np.exp((inverseKT)*(error_before - error_after))]): 
+                error_before = error_after
+                print('accepted, error is', error_before)
+                error_list.append(error_before)
+                current_step_list.append(i)
+                pos_x_list.append(i_x)
+                prior_list.append(prior_prob[i_x])
+                if i_x < max_links:
+                    row_num = i_x // m2b_ori.shape[1]
+                    col_num = i_x - row_num * m2b_ori.shape[1]
+                elif i_x >= max_links:
+                    i_x = i_x - m2b_ori.shape[0] * m2b_ori.shape[1]
+                    row_num = i_x // b2m_ori.shape[1]
+                    col_num = i_x - row_num * b2m_ori.shape[1]
+                metID_list.append(row_num)
+                microbeID_list.append(col_num)
+                numStepsNotAdded = 0
+            else:  ## not accepted   
+                x[i_x] = 0
+                numStepsNotAdded += 1
+                #x[i_x] = 1 - x[i_x]
+            error_window.append(error_before)
+            if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow) / inverseKT)):
+                break
+        ######## Convert x to net structure:
+        a = np.array(metID_list)
+        b = np.array(microbeID_list)
+        c = np.ones([len(metID_list)], dtype = int) * 3
+        c[np.where(np.array(pos_x_list) < max_links)[0]] = 2
+        net_added = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c})
+        net_new = pd.concat([net_ori, net_added])
+
+        print('The original network has ',len(net_ori),'links')
+        print('The improved network has ',len(net_new),'links')
+
+        net_links_added.append(net_new)
+
+        ######### Change in error with additions
+        plt.figure()
+        plt.plot(error_list)
+        plt.ylabel('error')
+        plt.xlabel('number of links added')
+
+        ###### Record model performance with links added
         ec_corr[i, j], ct_full[i, j], met_meas, met_pred, i_common = run_network_model(f, cell_line_names[j], net)
+# %%
 
 # %%
 plt.imshow(ec_corr.T, cmap='viridis')
