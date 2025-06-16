@@ -212,7 +212,7 @@ def calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID
             
     return metabolome_predicted
 
-def pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes):
+def calc_pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
     pred_error is a function used to compute the logarithmic error between experimentally measured
     metagenome and predicted metagenome computed from the model for a certain nutrient intake. It relies on 
@@ -257,7 +257,7 @@ def run_network_model(f, x, col_name, cellnum_init, cellnum_max, net, f_count, M
     # fun = lambda ct: pred_error(ct, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes)
     bnds = ((cellnum_init, cellnum_max), ) * len(ct0)
     constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_max}
-    res = minimize(pred_error, ct0, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+    res = minimize(calc_pred_error, ct0, args=my_args, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
     # res = minimize(fun, ct0, method='Nelder-Mead', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
     # res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
     # print(res)
@@ -329,7 +329,7 @@ def run_network_model(f, x, col_name, cellnum_init, cellnum_max, net, f_count, M
     # ax.set_ylabel('Extracellular metabolome')
     # ax.set_title('Extracellular metabolome-filtered-%s-%s' %(f_name, col_name))
 
-    return ec_corr, ct_full, metabolome_pred, metabolome_measured#, slope, intercept, ec_corr_filtered, slope_filt, intercept_filt
+    return res, ec_corr, ct_full, metabolome_pred, metabolome_measured#, slope, intercept, ec_corr_filtered, slope_filt, intercept_filt
 
 
 # %%
@@ -369,7 +369,7 @@ for i, f in enumerate(f_arr[:2]):
     for j, net in enumerate(all_networks[:1]):
         net_corrected, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net)
         f_count += 1
-        ec_corr[i, j], ct_full[i, j], metabolome_pred, metabolome_measured = run_network_model(f, diet, cell_line_names[j], cellnum_init_all[j], cellnum_final_all[j], net_corrected, f_count, MAX_ID_metabolites, MAX_ID_celltypes)
+        res, ec_corr[i, j], ct_full[i, j], metabolome_pred, metabolome_measured = run_network_model(f, diet, cell_line_names[j], cellnum_init_all[j], cellnum_final_all[j], net_corrected, f_count, MAX_ID_metabolites, MAX_ID_celltypes)
 
 
 # sns.histplot(data=slopes, bins=20, kde=True, color='crest', stat='density')
@@ -397,7 +397,7 @@ for i, f in enumerate(f_arr[:2]):
         rnet_corrected, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(rnet)
 
         f_count += 1
-        ec_corr[i, j], ct_full[i, j], metabolome_pred, metabolome_measured = run_network_model(f, diet, cell_line_names[j], np.array([1e03]), cellnum_final_all[j], rnet_corrected, f_count, MAX_ID_metabolites, MAX_ID_celltypes)
+        res, ec_corr[i, j], ct_full[i, j], metabolome_pred, metabolome_measured = run_network_model(f, diet, cell_line_names[j], np.array([1e03]), cellnum_final_all[j], rnet_corrected, f_count, MAX_ID_metabolites, MAX_ID_celltypes)
         # slopes[i, j], intercepts[i, j], ec_corr_filt[i, j], slopes_filt[i, j], intercepts_filt[i, j]
 
 
