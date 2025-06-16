@@ -64,6 +64,7 @@ met_test_mean = met_test_mean.iloc[:, ~np.isin(met_test_mean.columns, ['Baseline
 
 baseline_mass = met_baseline.mul(mw, axis=0).sum(axis=0).to_numpy()/10**6
 test_mass = met_test_mean.mul(mw, axis=0).sum(axis=0).to_numpy()/10**6
+
 SMALL_SIZE = 12
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 15
@@ -128,7 +129,19 @@ i_intake = i_intake[np.isin(i_intake, ec_metabolome_ID)]
 names = names[np.isin(names.index, np.append(['1', '2', '3', '4', '5'], ec_metabolome_ID.to_numpy()))]
 
 # %%
-############### Initial uptake-secretion network based on CORE profiles
+### Removing cell lines that violate mass balance
+# I am picking the baseline value with the least net mass as the benchmark, I could have equally picked the mean or the max-this seems more conservative.
+i_excess_mass = np.where(test_mass > baseline_mass.min())[0]
+excess_mass_cell_lines = met_test_mean.columns[i_excess_mass]
+
+met_test_mean = met_test_mean.copy().drop(columns=excess_mass_cell_lines)
+
+i_excess_mass_rows = np.where(np.isin(core_mean.iloc[:, 0], excess_mass_cell_lines))[0]
+core_mean = core_mean.copy().drop(index=i_excess_mass_rows)
+
+print("These cell lines have been removed for violating mass conservation: %s" % excess_mass_cell_lines.to_numpy())
+
+############### Initial uptake-secretion network based on CORE profiles for all cell lines that satisfy mass conservation
 n_lines = len(core_mean.index)
 all_networks = []
 for i in range(n_lines):
@@ -169,7 +182,5 @@ pickle_out.close()
 pickle_out = open("data.pickle","wb")
 pickle.dump([celltype_ID, celltype, ec_metabolome_ID, met_test_mean, met_baseline, core_mean], pickle_out, protocol=2)
 pickle_out.close()
-
-
 
 # %%

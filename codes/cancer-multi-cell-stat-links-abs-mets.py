@@ -89,8 +89,8 @@ def get_network(net):
     net_reduced = pd.DataFrame.from_dict({'metabolites': outgoingNodes, 'celltypes':ingoingNodes, 'edgeType':edge_types})
     net = net_reduced.copy()
     net_temp = net.copy()
-    net['edgeType'][net['edgeType']==5] = 2
-    net_temp['edgeType'][net_temp['edgeType']==5] = 3
+    net.loc[net_reduced['edgeType']==5, 'edgeType'] = 2
+    net_temp.loc[net_reduced['edgeType']==5, 'edgeType'] = 3
     net = pd.concat([net, net_temp]).drop_duplicates() #net.append(net_temp).drop_duplicates()
     net_ori = net.copy()
 
@@ -135,7 +135,7 @@ def Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes):
     ########## Normalize the b2m by out_degree
     out_degree = b2m.sum(0).copy()
     out_degree[out_degree==0]=1e6
-    b2m = (b2m / out_degree)
+    b2m = b2m / out_degree
     # b2m = np.array([i * x.to_numpy(dtype=float) for i in b2m.T], dtype=float).T # Adding known external supply of metabolites to the uptake matrix
 
     ########## Normalize the m2b by proportion of microbial abundance in each individual
@@ -153,48 +153,34 @@ def Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes):
     
     m2b = np.float32(m2b)
     b2m = np.float32(b2m)
-    return [m2b, b2m]
 
-def m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes):
-    '''
-    m2b_multiple_levels is a function used to generate matrices involving the calculation of metabolite 
-    byproducts and microbial biomass after several trophic levels/layers. Those matrices are:
-    (1) m2m_layer is a conversion matrix from the nutrient intake to the metabolite byproducts at a trophic
-    level or layer.
-    (2) m2m_total is a conversion matrix from the nutrient intake to a summation of metabolite byproducts at
-    all trophic levels or layers.
-    (3) m2b_total is a conversion matrix from the nutrient intake to a summation of all microbial/bacterial 
-    biomass gain at all trophic levels or layers.
-    Those matrices are computed based on (1) metabolite consumption matrix "m2b", (2) metabolite byproduct
-    generation matrix "b2m", (3) byproduct/leakage fraction "f", and (4) number of trophic levels/layers in the 
-    simulation "numLevels_max".
-    '''
-    m2m_total = np.zeros((MAX_ID_metabolites, MAX_ID_metabolites))    
-    m2b_total = np.zeros((MAX_ID_metabolites, MAX_ID_metabolites))  
-    
+    ## Net secretion matrix for both cell types, following uptake and secretion of metabolites 
+    m2m_total = np.zeros((MAX_ID_metabolites, MAX_ID_metabolites))
     m2m_total = np.array([i*j for i, j in zip(b2m, f*m2b)])
-    m2b_total = np.array([i*j for i, j in zip(m2m_total, (1-f)*m2b)])
 
-    return [m2b_total, m2m_total]
+    return [m2b, b2m, m2m_total]
 
-def pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes):
-    '''
-    pred_error is a function used to compute the logarithmic error between experimentally measured
-    metagenome and predicted metagenome computed from the model for a certain nutrient intake. It relies on 
-    (1) x: the nutrient intake, (2) i_intake: IDs of the nutrient intake, (3) m2b_total: a conversion matrix 
-    from the nutrient intake to the total biomass, and (4) ct_hyp: hypothesised relative cell type frequenices. The 
-    first three is used to compute the net gain in the intracellular metabolome predicted by the model "ic_pred" and compare it with the 
-    experimentally measured net gain in intracellular metabolome "ic_real".
-    '''
-
-    m2b, b2m = Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes)
-    m2b_total, m2m_total = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
+# def m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes):
+#     '''
+#     m2b_multiple_levels is a function used to generate matrices involving the calculation of metabolite 
+#     byproducts and microbial biomass after several trophic levels/layers. Those matrices are:
+#     (1) m2m_layer is a conversion matrix from the nutrient intake to the metabolite byproducts at a trophic
+#     level or layer.
+#     (2) m2m_total is a conversion matrix from the nutrient intake to a summation of metabolite byproducts at
+#     all trophic levels or layers.
+#     (3) m2b_total is a conversion matrix from the nutrient intake to a summation of all microbial/bacterial 
+#     biomass gain at all trophic levels or layers.
+#     Those matrices are computed based on (1) metabolite consumption matrix "m2b", (2) metabolite byproduct
+#     generation matrix "b2m", (3) byproduct/leakage fraction "f", and (4) number of trophic levels/layers in the 
+#     simulation "numLevels_max".
+#     '''
+#     m2m_total = np.zeros((MAX_ID_metabolites, MAX_ID_metabolites))    
+#     # m2b_total = np.zeros((MAX_ID_metabolites, MAX_ID_metabolites))  
     
-    ec_pred = m2m_total.sum(1) # Row sum of the final secretion matrix gives the extracellular metabolome since cell type abundances and relative abundances in the diet have been accounted in previous steps already.
-    
-    pred_error = (np.log10(ec_pred + 1e-10) - np.log10(ec_real + 1e-10)) / np.log10(ec_real +1e-10)
-    pred_error = np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
-    return pred_error
+#     m2m_total = np.array([i*j for i, j in zip(b2m, f*m2b)])
+#     # m2b_total = np.array([i*j for i, j in zip(m2m_total, (1-f)*m2b)])
+
+#     return m2m_total
 
 def calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
@@ -221,8 +207,29 @@ def calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID
     # met_leftover_levels[i_unused,ii] = x[i_unused]
     # else:
     #     met_leftover_levels[i_unused,ii] = met_levels[i_unused,ii-1]
+
+    metabolome_predicted = met_levels + met_leftover_levels.sum(1)
             
-    return [met_levels, met_leftover_levels]
+    return metabolome_predicted
+
+def pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes):
+    '''
+    pred_error is a function used to compute the logarithmic error between experimentally measured
+    metagenome and predicted metagenome computed from the model for a certain nutrient intake. It relies on 
+    (1) x: the nutrient intake, (2) i_intake: IDs of the nutrient intake, (3) m2b_total: a conversion matrix 
+    from the nutrient intake to the total biomass, and (4) ct_hyp: hypothesised relative cell type frequenices. The 
+    first three is used to compute the net gain in the intracellular metabolome predicted by the model "ic_pred" and compare it with the 
+    experimentally measured net gain in intracellular metabolome "ic_real".
+    '''
+
+    m2b, b2m, m2m_total = Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes)
+    # m2m_total = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
+    
+    ec_pred = calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes) # Row sum of all secreted metabolites plus unused metabolites
+    
+    pred_error = (np.log10(ec_pred + 1e-10) - np.log10(ec_real + 1e-10)) / np.log10(ec_real +1e-10)
+    pred_error = np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
+    return pred_error
 
 def run_network_model(f, x, col_name, cellnum_init, cellnum_max, net, f_count, MAX_ID_metabolites, MAX_ID_celltypes):
     # f_byproduct = 0.9
@@ -240,16 +247,17 @@ def run_network_model(f, x, col_name, cellnum_init, cellnum_max, net, f_count, M
  
 
     ######## Compute matrices involving the metabolite consumption and generation:
-    m2b, b2m = Ain_out(ct0, x, net, MAX_ID_metabolites, MAX_ID_celltypes)
-    m2b_total, m2m_total = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
+    m2b, b2m, m2m_total = Ain_out(ct0, x, net, MAX_ID_metabolites, MAX_ID_celltypes)
+    # m2m_total = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
 
     ######## The model is converted into an optimization problem where the nutrient intake is constantly changed to
-    # minimize the logarithmic error between experimentally measured metagenome and predicted metagenome computed 
-    # from the model for a certain nutrient intake.
-    fun = lambda ct_hyp: pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes)
+    # minimize the logarithmic error between experimentally measured metabolome and predicted metabolome computed 
+    # from the model for a certain up-sec network and cell type distribution
+    my_args = (net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes)
+    # fun = lambda ct: pred_error(ct, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes)
     bnds = ((cellnum_init, cellnum_max), ) * len(ct0)
-    constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - cellnum_max}
-    res = minimize(fun, ct0, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+    constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_max}
+    res = minimize(pred_error, ct0, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
     # res = minimize(fun, ct0, method='Nelder-Mead', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
     # res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
     # print(res)
@@ -260,9 +268,9 @@ def run_network_model(f, x, col_name, cellnum_init, cellnum_max, net, f_count, M
     ct_full = np.zeros((MAX_ID_celltypes,))
     ct_full = res.x
 
-    met_levels, met_leftover_levels = calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
+    metabolome_pred = calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
     metabolome_measured = ec_metabolome[col_name].to_numpy(dtype=float)
-    metabolome_pred = met_levels + met_leftover_levels.sum(1) #np.dot(m2m_total, x_full)
+    # metabolome_pred = met_levels + met_leftover_levels.sum(1) #np.dot(m2m_total, x_full)
     # i_common = np.where(metabolome_measured * metabolome_pred > 1e-5)[0]
     # metabolome_pred_common = metabolome_pred[i_common] #/ np.sum(metabolome_pred[i_common])
     # metabolome_measured_common = metabolome_measured[i_common] #/ np.sum(metabolome_measured[i_common])
