@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import Counter
 from scipy.stats import sem
+from sklearn.linear_model import LinearRegression
 
 # %%
 ############ Figure size settings
@@ -112,7 +113,7 @@ def get_network(net):
     # i_intake_reduced = df_metabolites.loc[i_intake].values.flatten()
     # i_intake_reduced = i_intake_reduced[~np.isnan(i_intake_reduced)].astype(int)
 
-    return net, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites
+    return net.reset_index(), i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites
 
 def Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
@@ -174,27 +175,30 @@ def m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_c
     generation matrix "b2m", (3) byproduct/leakage fraction "f", and (4) number of trophic levels/layers in the 
     simulation "numLevels_max".
     '''
-    m2m_layer = np.zeros((MAX_ID_metabolites, MAX_ID_metabolites, numLevels_max));  
+    m2m_total = np.zeros((MAX_ID_metabolites, MAX_ID_metabolites));  
     #m2b_total = np.zeros((MAX_ID_metabolites, MAX_ID_microbes));  
     m2b_total = np.zeros((MAX_ID_metabolites, MAX_ID_metabolites));  
     
-    f_mul = numpy.matlib.repmat(f, 1, MAX_ID_metabolites)
-    #s_step =  np.dot(b2m, m2b.T) # s_step is the conversion matrix of each trophic level/layer
-    s_step =  np.dot(b2m, f_mul*m2b.T) # s_step is the conversion matrix of each trophic level/layer
-    s_step_ii = np.eye(MAX_ID_metabolites, MAX_ID_metabolites)
-    #f_mul = numpy.matlib.repmat(f[np.newaxis,:], MAX_ID, 1)#numpy.matlib.repmat(f, 1, MAX_ID)
-    #f_mul = numpy.matlib.repmat(f, 1, MAX_ID_metabolites)
+    # f_mul = numpy.matlib.repmat(f, 1, MAX_ID_metabolites)
+    # #s_step =  np.dot(b2m, m2b.T) # s_step is the conversion matrix of each trophic level/layer
+    # s_step =  np.dot(b2m, f_mul*m2b.T) # s_step is the conversion matrix of each trophic level/layer
+    # s_step_ii = np.eye(MAX_ID_metabolites, MAX_ID_metabolites)
+    # #f_mul = numpy.matlib.repmat(f[np.newaxis,:], MAX_ID, 1)#numpy.matlib.repmat(f, 1, MAX_ID)
+    # #f_mul = numpy.matlib.repmat(f, 1, MAX_ID_metabolites)
     
-    """The for loop below iterates over mulitple levels of secretion and consumption across trophic levels, such that the first level of m2m_layer is an identity matrix and each subsequent layer adds the dot product of the conversion matrix with the previous layer of m2m_layer. m2b_total stores the cumulative secretion over every layer, all of which is multiplied with the last step of biomass accumulation outside the for loop.
-    For the limiting case of a single trophic layer, this means that m2m_layer and m2b_total will just be the identity matrix at the end of the for loop, because s_step_ii only gets updated at the end of every iteration and the for lopp only runs once for numLevels_max = 1. But the logic is that m2m_layer should finally have the net secretion for each level obtained from the dot product of b2m and f*m2b.T, and m2b_total is the resultant of this secretion and the final step of biomasss accumulation, which is given by (1-f)*m2b. The resultant is calculated using a dot product exactly like the first step secretion, where m2b_total till then gives the total secretion (like b2m) and (1-f)*m2b.T gives the biomass accumulation (as opposed to f*m2b.T which gives the secreted fraction of the uptake.)"""
-    for ii in range(numLevels_max):
-        s_step_ii = np.dot(s_step_ii, s_step)
-        m2b_total = m2b_total + s_step_ii
-        m2m_layer[:,:,ii] = s_step_ii
-        # s_step_ii = np.dot(s_step_ii, s_step)  
-    m2m_total = m2b_total
-    m2b_total = np.dot((1 - f_mul) * m2b.T, m2b_total) # m2b_total has an extra multiplication of m2b and (1-f).
-    return [m2b_total, m2m_total, m2m_layer]
+    # """The for loop below iterates over mulitple levels of secretion and consumption across trophic levels, such that the first level of m2m_layer is an identity matrix and each subsequent layer adds the dot product of the conversion matrix with the previous layer of m2m_layer. m2b_total stores the cumulative secretion over every layer, all of which is multiplied with the last step of biomass accumulation outside the for loop.
+    # For the limiting case of a single trophic layer, this means that m2m_layer and m2b_total will just be the identity matrix at the end of the for loop, because s_step_ii only gets updated at the end of every iteration and the for loop only runs once for numLevels_max = 1. But the logic is that m2m_layer should finally have the net secretion for each level obtained from the dot product of b2m and f*m2b.T, and m2b_total is the resultant of this secretion and the final step of biomasss accumulation, which is given by (1-f)*m2b. The resultant is calculated using a dot product exactly like the first step of secretion, where m2b_total till then gives the total secretion (like b2m) and (1-f)*m2b.T gives the biomass accumulation (as opposed to f*m2b.T which gives the secreted fraction of the uptake.)"""
+    # for ii in range(numLevels_max):
+    #     s_step_ii = np.dot(s_step_ii, s_step)
+    #     m2b_total = m2b_total + s_step_ii
+    #     m2m_layer[:,:,ii] = s_step_ii.copy()
+    #     # s_step_ii = np.dot(s_step_ii, s_step)  
+    # m2m_total = m2b_total.copy()
+    # m2b_total = np.dot((1 - f_mul) * m2b.T, m2b_total) # m2b_total has an extra multiplication of m2b and (1-f).
+    m2m_total = np.array([i*j for i, j in zip(b2m, f*m2b)])
+    m2b_total = np.array([i*j for i, j in zip(m2m_total, (1-f)*m2b)])
+
+    return [m2b_total, m2m_total]
 
 def pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
@@ -207,9 +211,9 @@ def pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MA
     '''
 
     m2b, b2m = Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes)
-    m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
+    m2b_total, m2m_total = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
     
-    ec_pred = m2m_total.sum(0) # Row sum of the final secretion matrix gives the extracellular metabolome since cell type abundances and relative abundances in the diet have been accounted in previous steps already.
+    ec_pred = m2m_total.sum(1) # Row sum of the final secretion matrix gives the extracellular metabolome since cell type abundances and relative abundances in the diet have been accounted in previous steps already.
     
     pred_error = (np.log10(ec_pred + 1e-10) - np.log10(ec_real + 1e-10)) / np.log10(ec_real +1e-10)
     pred_error = np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
@@ -227,14 +231,14 @@ def calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID
     '''
     i_x = x.index.to_numpy(dtype=int)
     i_unused = np.where(np.sum(m2b.T,0) == 0)[0]
-    met_levels = np.zeros((MAX_ID_metabolites, numLevels_max))  
+    met_levels = m2m_total.copy().sum(1)
     met_leftover_levels = np.zeros((MAX_ID_metabolites, numLevels_max))
     
     # x_full = np.zeros((MAX_ID_metabolites,));
     # x_full[i_intake] = x;
     
     # for ii in range(numLevels_max):
-    met_levels = m2m_total.sum(axis=0) #np.dot(m2m_layer[:,:,ii], x)
+    # met_levels = m2m_total.sum(axis=0) #np.dot(m2m_layer[:,:,ii], x)
     met_leftover_levels[i_unused, 0] = x[i_x[i_unused]]
     # if ii==0:
     # met_leftover_levels[i_unused,ii] = x[i_unused]
@@ -260,17 +264,17 @@ def run_network_model(f, x, col_name, cellnum_init, cellnum_max, net, f_count, M
 
     ######## Compute matrices involving the metabolite consumption and generation:
     m2b, b2m = Ain_out(ct0, x, net, MAX_ID_metabolites, MAX_ID_celltypes)
-    m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
+    m2b_total, m2m_total = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
 
     ######## The model is converted into an optimization problem where the nutrient intake is constantly changed to
     # minimize the logarithmic error between experimentally measured metagenome and predicted metagenome computed 
     # from the model for a certain nutrient intake.
     fun = lambda ct_hyp: pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes)
     bnds = ((cellnum_init, cellnum_max), ) * len(ct0)
-    constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - cellnum_max}
-    res = minimize(fun, ct0, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+    # constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - cellnum_max}
+    # res = minimize(fun, ct0, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
     # res = minimize(fun, ct0, method='Nelder-Mead', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
-    # res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+    res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3)#, constraints=constraint)
     # print(res)
 
     ######## As long as the optimized nutrient intake is found by using the above optimization solver, the
@@ -282,27 +286,65 @@ def run_network_model(f, x, col_name, cellnum_init, cellnum_max, net, f_count, M
     met_levels, met_leftover_levels = calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
     metabolome_measured = ec_metabolome[col_name].to_numpy(dtype=float)
     metabolome_pred = met_levels + met_leftover_levels.sum(1) #np.dot(m2m_total, x_full)
-    i_common = np.where(metabolome_measured * metabolome_pred > 1e-5)[0]
-    metabolome_pred_common = metabolome_pred[i_common] #/ np.sum(metabolome_pred[i_common])
-    metabolome_measured_common = metabolome_measured[i_common] #/ np.sum(metabolome_measured[i_common])
+    # i_common = np.where(metabolome_measured * metabolome_pred > 1e-5)[0]
+    # metabolome_pred_common = metabolome_pred[i_common] #/ np.sum(metabolome_pred[i_common])
+    # metabolome_measured_common = metabolome_measured[i_common] #/ np.sum(metabolome_measured[i_common])
 
-    #### Metabolome comparison
-    # fig, ax = plt.subplots()
-    # ax.loglog(metabolome_pred_common, metabolome_measured_common, 'ko')
-    # ax.plot([1e-5, 1], [1e-5, 1],'k-')
-    # ax.set_aspect('equal')
-    # ax.set_xlabel('predicted')
-    # ax.set_ylabel('experimentally observed')
-    # ax.set_title('Extracellular metabolome-%s-%s' %(f_name, col_name))
-    # fig.savefig('../figures/one-celltype-random-net/absolute-abundance/ec-corr-%d.png' % (f_count), dpi=300.)
+    ### Metabolome comparison
+    fig, ax = plt.subplots()
+    ax.loglog(metabolome_pred, metabolome_measured, 'ko')
+    ax.plot([1e-5, 1], [1e-5, 1],'k-')
+    ax.set_aspect('equal')
+    ax.set_xlabel('predicted')
+    ax.set_ylabel('experimentally observed')
+    ax.set_title('Extracellular metabolome-%s-%s' %(f_name, col_name))
+    fig.savefig('../figures/one-celltype-random-net/absolute-abundance/ec-corr-%d.png' % (f_count), dpi=300.)
+    plt.close(fig)
 
-    # ic_corr = pearsonr(ic_pred[ic_real>0], ic_real[ic_real>0])[0]
-    ec_corr = pearsonr(metabolome_pred_common, metabolome_measured_common)[0]
+    ## Metabolome vs diet prediction
+    x_mod = x.to_numpy().reshape(-1, 1)
+    model = LinearRegression()
+    fit_obj = model.fit(np.log10(x_mod+1e-07), np.log10(metabolome_measured+1e-07))
+    slope = fit_obj.coef_
+    intercept = fit_obj.intercept_
+    y_pred = slope*np.log10(x_mod+1e-07) + intercept
+
+    fig, ax = plt.subplots()
+    ax.plot(np.log10(x_mod+1e-07), np.log10(metabolome_measured+1e-07), 'ko')
+    ax.plot(np.log10(x_mod+1e-07), y_pred,'k-')
+    ax.set_aspect('equal')
+    ax.set_xlabel('Diet')
+    ax.set_ylabel('Extracellular metabolome')
+    ax.set_title('Extracellular metabolome-%s-%s' %(f_name, col_name))
+    fig.savefig('../figures/one-celltype-random-net/absolute-abundance/diet-prediction/%d.png' % (f_count), dpi=300.)
+    plt.close(fig)
+
+    ec_corr = pearsonr(np.log10(metabolome_pred+1e-07), np.log10(metabolome_measured+1e-07))[0]
     print('-------------------------------------------------------------------------------------------------------------')
     print('(Correlation coefficient, P-value) of the correlation between predicted and experimentally measured extracellular metabolome:')
-    print(pearsonr(metabolome_pred_common, metabolome_measured_common))
+    print(pearsonr(np.log10(metabolome_pred+1e-07), np.log10(metabolome_measured+1e-07)))
     print('-------------------------------------------------------------------------------------------------------------')
-    return ec_corr, ct_full, metabolome_pred, metabolome_measured, i_common
+
+    ## Filtered predictions for random networks
+    i_filter = np.where(~((b2m == 0) + (m2b == 0)))[0]
+    metabolome_pred_filtered = metabolome_pred[i_filter]
+    metabolome_measured_filtered = metabolome_measured[i_filter]
+    ec_corr_filtered = pearsonr(np.log10(metabolome_pred_filtered+1e-07), np.log10(metabolome_measured_filtered+1e-07))[0]
+
+    model_filt = LinearRegression()
+    fit_obj_filt = model_filt.fit(np.log10(x_mod[i_filter]+1e-07), np.log10(metabolome_measured_filtered+1e-07))
+    slope_filt = fit_obj_filt.coef_
+    intercept_filt = fit_obj_filt.intercept_
+    y_pred_filt = slope_filt*np.log10(x_mod[i_filter]+1e-07) + intercept_filt
+    fig, ax = plt.subplots()
+    ax.plot(np.log10(x_mod[i_filter]+1e-07), np.log10(metabolome_measured_filtered+1e-07), 'ko')
+    ax.plot(np.log10(x_mod[i_filter]+1e-07), y_pred_filt,'k-')
+    ax.set_aspect('equal')
+    ax.set_xlabel('Diet')
+    ax.set_ylabel('Extracellular metabolome')
+    ax.set_title('Extracellular metabolome-filtered-%s-%s' %(f_name, col_name))
+
+    return ec_corr, ct_full, metabolome_pred, metabolome_measured #, slope, intercept, ec_corr_filtered, slope_filt, intercept_filt
 
 
 # %%
@@ -316,6 +358,11 @@ diet = met_baseline.mean(axis=1)
 # ic_corr = np.zeros((len(f_arr), len(cell_line_names)))
 ec_corr = np.zeros((len(f_arr), len(cell_line_names)))
 ct_full = ec_corr.copy()
+slopes = np.zeros_like(ec_corr)
+intercepts = np.zeros_like(ec_corr)
+ec_corr_filt = np.zeros_like(ec_corr)
+slopes_filt = np.zeros_like(ec_corr)
+intercepts_filt = np.zeros_like(ec_corr)
 
  ## Source for initial and final cell numbers for the various cell lines: https://www.thermofisher.com/in/en/home/references/gibco-cell-culture-basics/cell-culture-protocols/cell-culture-useful-numbers.html
 n_lines = len(core_mean.loc[:, 'Cell line'])
@@ -332,11 +379,15 @@ cellnum_final_all[i_t75] = 8.4e+06
 # %%
 ####### Run the model over the initialised parameters with the pickled initial network
 f_count = 0
-for i, f in enumerate(f_arr):
-    for j, net in enumerate(all_networks):
+for i, f in enumerate(f_arr[:2]):
+    for j, net in enumerate(all_networks[:1]):
         net_corrected, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net)
         f_count += 1
-        ec_corr[i, j], ct_full[i, j], metabolome_pred_common, metabolome_measured_common = run_network_model(f, diet, cell_line_names[j], cellnum_init_all[j], cellnum_final_all[j], net_corrected, f_count, MAX_ID_metabolites, MAX_ID_celltypes)
+        ec_corr[i, j], ct_full[i, j], metabolome_pred, metabolome_measured = run_network_model(f, diet, cell_line_names[j], np.array([1e04]), cellnum_final_all[j], net_corrected, f_count, MAX_ID_metabolites, MAX_ID_celltypes)
+
+
+# sns.histplot(data=slopes, bins=20, kde=True, color='crest', stat='density')
+# sns.histplot(data=intercepts, bins=20, kde=True, color='crest', stat='density')
 
 # %%
 ####### Generate random networks, one for each cell line
@@ -355,12 +406,13 @@ for i in range(len(all_networks)):
 # %%
 ######## Run model with random initial networks
 f_count = 0
-for i, f in enumerate(f_arr):
-    for j, rnet in enumerate(all_random_networks):
+for i, f in enumerate(f_arr[:2]):
+    for j, rnet in enumerate(all_random_networks[:1]):
         rnet_corrected, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(rnet)
 
         f_count += 1
-        ec_corr[i, j], ct_full[i, j], metabolome_pred, metabolome_measured, i_common = run_network_model(f, diet, cell_line_names[j], cellnum_init_all[j], cellnum_final_all[j], rnet_corrected, f_count, MAX_ID_metabolites, MAX_ID_celltypes)
+        ec_corr[i, j], ct_full[i, j], metabolome_pred, metabolome_measured = run_network_model(f, diet, cell_line_names[j], cellnum_init_all[j], cellnum_final_all[j], rnet_corrected, f_count, MAX_ID_metabolites, MAX_ID_celltypes)
+        # slopes[i, j], intercepts[i, j], ec_corr_filt[i, j], slopes_filt[i, j], intercepts_filt[i, j]
 
 
 # %%
@@ -384,3 +436,25 @@ plt.ylabel('Cell line')
 plt.savefig('../figures/one-celltype-random-net/absolute-abundance/celltype-abundance.png', dpi=300.)
 
 ####################################################################
+# %%
+f, ax = plt.subplots(figsize=(10, 10))
+slopes_df = pd.DataFrame(slopes.T, columns=f_arr, index=cell_line_names)
+sns.heatmap(data=slopes_df, linewidth=0.5, cmap='crest', ax=ax)
+
+plt.title('Diet vs measured metabolome slope')
+plt.xlabel('Byproduct fraction, f')
+plt.ylabel('Cell line')
+plt.savefig('../figures/one-celltype-random-net/absolute-abundance/diet-prediction/slopes.png', dpi=300.)
+
+# %%
+f, ax = plt.subplots(figsize=(10, 10))
+int_df = pd.DataFrame(intercepts.T, columns=f_arr, index=cell_line_names)
+sns.heatmap(data=int_df, linewidth=0.5, cmap='crest', ax=ax)
+
+plt.title('Diet vs measured metabolome intercept')
+plt.xlabel('Byproduct fraction, f')
+plt.ylabel('Cell line')
+plt.savefig('../figures/one-celltype-random-net/absolute-abundance/diet-prediction/intercepts.png', dpi=300.)
+# %%
+sns.scatterplot(x=slopes_filt[0], y=intercepts_filt[0])
+# %%

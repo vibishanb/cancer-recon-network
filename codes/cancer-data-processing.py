@@ -1,6 +1,5 @@
 # %% [markdown]
 # # Data processing for cancer uptake-secretion model
-# This file is used to pre-process all data (especially Chia network and Thai Children data) into the format which is convenient for simulations.
 
 # %%
 ########### Self-customized setting
@@ -21,7 +20,7 @@ i_intake = i_intake['IDs'].values
 print(i_intake)
 
 ########### Load mean cell abundance priors-randomly sampled from a uniform distribution ranged [0, 1)
-k = 1 # Assumed number of cell types for current iteration of the model
+k = 1 # Temporarily assumed number of cell types for current iteration of the model
 celltype_all = pd.read_csv('../input-data/prior-celltype-abundance.txt', sep=',')
 celltype_all = celltype_all.iloc[:k, ] # Selecting number of cell types
 celltype_all.head()
@@ -40,6 +39,7 @@ ec_metabolome_all = pd.read_excel('../input-data/jain-data/metabolome-jain.xlsx'
 core_data_all = pd.read_excel('../input-data/jain-data/metabolome-jain.xlsx', sheet_name='CORE_profile')
 
 i_valid_mets = np.where(ec_metabolome_all['Calibrated'] > 0 )[0]
+valid_met_IDs = ec_metabolome_all['metabolites_ID'].iloc[i_valid_mets].to_numpy()
 ec_metabolome = ec_metabolome_all.iloc[i_valid_mets, :]
 
 i_valid_cell_lines = np.where(np.isin(core_data_all.columns, ec_metabolome.columns))[0]
@@ -101,7 +101,8 @@ plt.legend(loc='lower right')
 
 # %%
 ########### Generate (containing information of metabolite consumption and production)
-net = pd.read_csv('../input-data/jain-data/prior-recon-network.csv').dropna()
+net = pd.read_csv('../input-data/jain-data/prior-recon-network-petrella.csv').dropna()
+i_valid_mets = np.where(net['metabolites_ID'].isin(valid_met_IDs))[0]
 net = net.iloc[i_valid_mets, :]
 # net.loc[:, 'metabolites_ID'] = net.loc[:, 'metabolites_ID'].to_numpy().astype(str)
 # mean_net = net.groupby('celltypes_ID').mean()
@@ -134,6 +135,26 @@ for i in range(n_lines):
     curr_net = valid_net.copy()
     curr_net.iloc[:, -1] = np.where(core_mean.iloc[i, 1:] == 0, 0, 5)
     all_networks.append(curr_net)
+
+## Only un-comment if using more than one cell type
+k = 2 # Final number of cell types assumed for the current iteration of the model
+## Update celltype_IDs and all recon networks for the final number of cell types assumed
+celltype_all = pd.read_csv('../input-data/prior-celltype-abundance.txt', sep=',')
+celltype_all = celltype_all.iloc[:k, ] # Selecting number of cell types
+celltype_all.head()
+### Randomly sampled relative abundances of the cell types
+rand = np.random.uniform(0, 1, k)
+celltype_all['Mean'] = rand/rand.sum()
+celltype_ID = celltype_all['celltype_id']
+#print((celltype_ID!=0).sum())
+celltype = celltype_all[celltype_ID!=0].loc[:,'Mean']
+celltype_ID = celltype_ID[celltype_ID!=0]
+
+for i, net in enumerate(all_networks):
+    net2 = net.copy()
+    net2.loc[:, 'celltypes_ID'] = 2 # Second cell type with the same network
+    valid_net = pd.concat([net, net2]) # Network with selected number of cell types
+    all_networks[i] = valid_net.copy()
 
 
 # %%

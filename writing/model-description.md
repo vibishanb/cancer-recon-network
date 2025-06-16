@@ -26,7 +26,7 @@ which indicates that the net intake for each cell type is scaled both by the num
 
 Out of this intake, we assume that each cell type secretes some fraction, $f$, hereafter called the byproduct fraction. Another binary matrix,$A_{out}$ is used to describe which cell type is capable of secreting which metabolite. As with $A_{in}$, $A_{out}(\alpha, i) = 1$ for every metabolite $\alpha$ that is <ins>secreted</ins> by cell type $i$, and zero everywhere else. The net secretion for each cell type $i$ is therefore given by:
 ```math
-\text{Output}_i = f\ \frac{A_{out}}{\text{Out-degree}}\ \text{Intake}_i,
+\text{Output}_i = f\ \frac{A_{out}(\alpha, i)}{\text{Out-degree}}\ \text{Intake}_i,
 ```
 which indicates that the net secreted flux of metabolites is split equally among all the metabolites that cell type $i$ is capable of secreting (out degree). For simplicity, we assume $f$ to be the same for all cell types.
 
