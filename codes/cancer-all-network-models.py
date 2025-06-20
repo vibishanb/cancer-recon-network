@@ -151,7 +151,7 @@ def Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes):
     ct_hyp_repmat = numpy.matlib.repmat(ct_freq[np.newaxis,:], MAX_ID_metabolites, 1)
     m2b = m2b * ct_hyp_repmat # Uptake is proportional to cell type relative abundance
     m2b = np.asarray([i*j for i, j in zip(m2b, x.to_numpy(dtype=float))]) # Relative amount of nutrient taken up
-    m2b = m2b/in_degree
+    # m2b = m2b/in_degree
     
     m2b = np.float32(m2b)
     b2m = np.float32(b2m)
@@ -378,7 +378,7 @@ cellnum_final_all[i_t75] = 8.4e+06
 # f_count = 0
 k = 3 # Number of cell types
 net_state = 'stat-net/'
-fig_name = 'with-in-degree'
+fig_name = 'no-in-degree'
 
 for i, f in enumerate(f_arr):
     for j, net in enumerate(all_networks):
@@ -421,7 +421,7 @@ intercepts = np.zeros_like(ec_corr)
 
 k = 3 # Number of cell types
 net_state = 'random-net/'
-fig_name = 'with-in-degree'
+fig_name = 'no-in-degree'
 
 for i, f in enumerate(f_arr):
     for j, rnet in enumerate(all_random_networks):
