@@ -151,7 +151,7 @@ def Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes):
     ct_hyp_repmat = numpy.matlib.repmat(ct_freq[np.newaxis,:], MAX_ID_metabolites, 1)
     m2b = m2b * ct_hyp_repmat # Uptake is proportional to cell type relative abundance
     m2b = np.asarray([i*j for i, j in zip(m2b, x.to_numpy(dtype=float))]) # Relative amount of nutrient taken up
-    # m2b = m2b/in_degree
+    m2b = m2b/in_degree
     
     m2b = np.float32(m2b)
     b2m = np.float32(b2m)
@@ -264,7 +264,7 @@ def run_network_model(f, x, col_name, k, cellnum_init, cellnum_max, net, MAX_ID_
     # ax.set_ylabel('Extracellular metabolome')
     # ax.set_title('Extracellular metabolome-filtered-%s-%s' %(f_name, col_name))
 
-    return ec_corr, ct_full, metabolome_pred, slope, intercept#, ec_corr_filtered, slope_filt, intercept_filt
+    return [ec_corr, ct_full, metabolome_pred, slope, intercept]#, ec_corr_filtered, slope_filt, intercept_filt
 
 def plot_all_corrs(net_state, fig_name, k, f, metabolome_pred, ec_metabolome, ec_corr, ct_full, slopes, intercepts):
 
@@ -376,9 +376,9 @@ cellnum_final_all[i_t75] = 8.4e+06
 # %%
 ####### Run the model over the initialised parameters with the pickled initial network
 # f_count = 0
-k = 2 # Number of cell types
+k = 3 # Number of cell types
 net_state = 'stat-net/'
-fig_name = 'no-in-degree'
+fig_name = 'with-in-degree'
 
 for i, f in enumerate(f_arr):
     for j, net in enumerate(all_networks):
@@ -419,7 +419,7 @@ metabolome_pred = np.zeros((len(f_arr), len(cell_line_names), len(ec_metabolome)
 slopes = np.zeros_like(ec_corr)
 intercepts = np.zeros_like(ec_corr)
 
-k = 2 # Number of cell types
+k = 3 # Number of cell types
 net_state = 'random-net/'
 fig_name = 'with-in-degree'
 
