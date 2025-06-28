@@ -410,7 +410,7 @@ cellnum_init_all[i_t75] = 2.1e+06
 cellnum_final_all = np.array([23.3e+06]*n_lines)
 cellnum_final_all[i_t75] = 8.4e+06
 
-in_degree_flag = False
+in_degree_flag = True
 if in_degree_flag:
     fig_name = 'with-in-degree'
 else:
@@ -419,7 +419,7 @@ else:
 # %%
 ####### Run the model over the initialised parameters with the pickled initial network
 # f_count = 0
-k = 3 # Number of cell types
+# k = 3 # Number of cell types
 net_state = 'stat-net/'
 
 for i, f in enumerate(f_arr):
@@ -430,17 +430,13 @@ for i, f in enumerate(f_arr):
 
 # %%
 ######### All plots
-figsave_flag = False
-disp_flag = True
+figsave_flag = True
+disp_flag = False
 
-for i, f in enumerate(f_arr[:1]):
+for i, f in enumerate(f_arr):
     plot_all_corrs(net_state, fig_name, k, f, metabolome_pred[i, :, :], ec_metabolome, figsave_flag, disp_flag)
 
 plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_error, slopes, intercepts, figsave_flag, disp_flag)
-
-
-# sns.histplot(data=slopes, bins=20, kde=True, color='crest', stat='density')
-# sns.histplot(data=intercepts, bins=20, kde=True, color='crest', stat='density')
 
 # %%
 ####### Generate random networks, one for each cell line
@@ -461,19 +457,20 @@ for i in range(len(all_networks)):
 # f_count = 0
 ec_corr = np.zeros((len(f_arr), len(cell_line_names)))
 ct_full = np.zeros((len(f_arr), len(cell_line_names))) # For one cell type
+mean_error = np.zeros((len(f_arr), len(cell_line_names)))
 # ct_full = np.zeros((len(f_arr), len(cell_line_names), k)) # For more than one cell type
 metabolome_pred = np.zeros((len(f_arr), len(cell_line_names), len(ec_metabolome)))
 slopes = np.zeros_like(ec_corr)
 intercepts = np.zeros_like(ec_corr)
 
-k = 3 # Number of cell types
+# k = 3 # Number of cell types
 net_state = 'random-net/'
 
-for i, f in enumerate(f_arr[:1]):
+for i, f in enumerate(f_arr):
     for j, rnet in enumerate(all_random_networks):
         rnet_corrected, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(rnet)
         # f_count += 1
-        ec_corr[i, j], ct_full[i, j], metabolome_pred[i, j], slopes[i, j], intercepts[i, j] = run_network_model(f, diet, cell_line_names[j], k, cellnum_init_all[j], cellnum_final_all[j], rnet_corrected, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+        ec_corr[i, j], ct_full[i, j], mean_error[i, j], metabolome_pred[i, j], slopes[i, j], intercepts[i, j] = run_network_model(f, diet, cell_line_names[j], k, cellnum_init_all[j], cellnum_final_all[j], rnet_corrected, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
 # %% 
 ########### All plots
