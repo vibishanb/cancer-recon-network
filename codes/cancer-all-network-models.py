@@ -463,7 +463,7 @@ intercepts = np.zeros_like(ec_corr)
 net_state = 'random-net/'
 
 for i, f in enumerate(f_arr[:1]):
-    for j, rnet in enumerate(all_random_networks[:12]):
+    for j, rnet in enumerate(all_random_networks[:1]):
         rnet_corrected, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(rnet)
         ec_corr[i, j], ct_full[i, j], mean_error[i, j], metabolome_pred[i, j], metabolome_measured, slopes[i, j], intercepts[i, j] = run_network_model(f, diet, cell_line_names[j], k, cellnum_init_all[j], cellnum_final_all[j], rnet_corrected, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
