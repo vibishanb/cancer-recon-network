@@ -56,12 +56,12 @@ def figure_size_setting(WIDTH):
 ######## Import the pickled file containing all processed data which are useful for simulations (the processing is
 ########### done in "cancer-data-processing.py")
 import pickle
-pickle_in = open("cancer_network.pickle","rb")
-all_networks, i_intake, names = pickle.load(pickle_in)
+# pickle_in = open("cancer_network.pickle","rb")
+all_networks, i_intake, names = pd.read_pickle('cancer_network.pickle')
 # i_selfish = 0
 
-pickle_in = open("data.pickle","rb")
-celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pickle.load(pickle_in)
+# pickle_in = open("data.pickle","rb")
+celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle('data.pickle')
 
 # %%
 ################ All functions
@@ -89,25 +89,6 @@ def get_network(net):
     ingoingNodes = ingoingNodesTemp[~np.isnan(ingoingNodesTemp)].astype(int)
 
     net_reduced = pd.DataFrame.from_dict({'metabolites': outgoingNodes, 'celltypes':ingoingNodes, 'edgeType':edge_types})
-    # net = net_reduced.copy()
-    # net_temp = net.copy()
-    # net.loc[net_reduced['edgeType']==5, 'edgeType'] = 2
-    # net_temp.loc[net_reduced['edgeType']==5, 'edgeType'] = 3
-    # net = pd.concat([net, net_temp]).drop_duplicates() #net.append(net_temp).drop_duplicates()
-    # net_ori = net.copy()
-
-    # celltype_ID_reduced = df_celltypes.reindex(celltype_ID).values.flatten()
-    # celltype_ID_reduced = celltype_ID_reduced[~np.isnan(celltype_ID_reduced)].astype(int)
-
-    # metabolome_ID_reduced = df_metabolites.reindex(ec_metabolome_ID).values.flatten()
-    # metabolome_ID_reduced = metabolome_ID_reduced[~np.isnan(metabolome_ID_reduced)].astype(int)
-
-
-    # # i_selfish_reduced = df_celltypes.reindex(i_selfish).values.flatten()
-    # # i_selfish = i_selfish_reduced[~np.isnan(i_selfish_reduced)].astype(int)
-
-    # i_intake_reduced = df_metabolites.loc[i_intake].values.flatten()
-    # i_intake_reduced = i_intake_reduced[~np.isnan(i_intake_reduced)].astype(int)
 
     return net_reduced, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites
 
@@ -138,15 +119,8 @@ def Ain_out(ct_hyp, x, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes
     out_degree = b2m.sum(0).copy()
     out_degree[out_degree==0]=1e6
     b2m = b2m / out_degree
-    # b2m = np.array([i * x.to_numpy(dtype=float) for i in b2m.T], dtype=float).T # Adding known external supply of metabolites to the uptake matrix
 
     ########## Normalize the m2b by proportion of microbial abundance in each individual
-    # ct_hyp_repmat = numpy.matlib.repmat(ct_hyp[np.newaxis,:], MAX_ID_metabolites, 1)
-    # m2b = m2b * ct_hyp_repmat
-    # Also multiply by relative nutrient concentrations
-    # in_degree = m2b.sum(1)
-    # in_degree[in_degree==0]=1e6
-    # m2b = m2b / numpy.matlib.repmat(in_degree[:,np.newaxis], 1, MAX_ID_celltypes)
     ct_freq = ct_hyp/ct_hyp.sum()
     ct_hyp_repmat = numpy.matlib.repmat(ct_freq[np.newaxis,:], MAX_ID_metabolites, 1)
     m2b = m2b * ct_hyp_repmat # Uptake is proportional to cell type relative abundance
@@ -173,12 +147,7 @@ def calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites):
     (which is considered to be reaching the end of the gut because of the finite gut length and gut motility.),
     and (2) met_leftover_levels: all unusable metabolites from all previous trophic levels/layers. 
     '''
-    # i_x = x.index.to_numpy(dtype=int)
-    # i_unused = np.where(m2b.sum(axis=1) == 0)[0]
     met_levels = m2m_total.sum(1)
-    # met_leftover_levels = np.zeros_like(met_levels)
-    # i_unused = np.where(m2b.sum(1)==0)[0]
-
     met_leftover_levels = np.where(m2b.sum(1)==0, x.to_numpy(), 0)
 
     metabolome_predicted = met_levels + met_leftover_levels
@@ -196,7 +165,6 @@ def calc_pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, in_degree_flag, M
     '''
 
     m2b, b2m, m2m_total = Ain_out(ct_hyp, x, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
-    # m2m_total = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
     
     ec_pred = calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites) # Row sum of all secreted metabolites plus unused metabolites
     
@@ -231,8 +199,13 @@ def run_network_model(f, x, col_name, k, cellnum_init, cellnum_max, net, in_degr
     else:
         ct_full = cellnum_max
 
-    metabolome_pred = calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites)
-    metabolome_measured = ec_real.copy()
+    metabolome_pred_unfilt = calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites)
+    metabolome_measured_unfilt = ec_real.copy()
+
+    ### Taking out unused metabolites from the analysis
+    i_filter = np.where(m2b.sum(1)!=0)[0]
+    metabolome_measured = metabolome_measured_unfilt[i_filter]
+    metabolome_pred = metabolome_pred_unfilt[i_filter]
 
     ### Correlation between predicted and expected metabolome
     ec_corr = pearsonr(np.log10(metabolome_pred+1e-07), np.log10(metabolome_measured+1e-07))[0]
@@ -271,7 +244,7 @@ def run_network_model(f, x, col_name, k, cellnum_init, cellnum_max, net, in_degr
 
     return [ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, slope, intercept]#, ec_corr_filtered, slope_filt, intercept_filt
 
-def plot_all_corrs(net_state, fig_name, k, f, metabolome_pred, ec_metabolome, figsave_flag=False, disp_flag=True):
+def plot_all_corrs(net_state, fig_name, k, f, metabolome_pred, metabolome_measured, ec_metabolome, figsave_flag=False, disp_flag=True):
 
     try:
         os.makedirs('../figures/'+str(k)+'-celltypes/'+net_state)
@@ -280,15 +253,16 @@ def plot_all_corrs(net_state, fig_name, k, f, metabolome_pred, ec_metabolome, fi
 
     nrow = 10
     ncol = 6
-    fig, ax = plt.subplots(nrow, ncol, figsize=(10, 10))
+    fig, ax = plt.subplots(nrow, ncol, figsize=(11, 11))
     cl_names = ec_metabolome.columns.to_numpy()
     count = 0
     for i in range(nrow):
         for j in range(ncol):
             if count < len(cl_names):
-                ax[i, j].loglog(metabolome_pred[count, :], ec_metabolome.iloc[:, count], 'k.')
-                ax[i, j].plot([1e-5, 1], [1e-5, 1],'k-')
+                ax[i, j].scatter(np.log10(metabolome_pred[count]+1e-7), np.log10(metabolome_measured[count]+1e-7), c='k', s=4)
+                ax[i, j].plot([-7, 1], [-7, 1],'k-')
                 ax[i, j].set_title('%s' % cl_names[count], {'fontsize': 6}, pad=2)
+                ax[i, j].tick_params(axis='both', which='major', length=4, labelsize=10)
                 if i < nrow-1:
                     ax[i, j].tick_params(axis='x', which='both', labelbottom=False)
                 if j > 0:
@@ -297,8 +271,11 @@ def plot_all_corrs(net_state, fig_name, k, f, metabolome_pred, ec_metabolome, fi
                 continue
             else:
                 break
-    fig.supxlabel('Predicted metabolome', y=0.05)
-    fig.supylabel('Empirical data', x=0.05)
+    #### Turn off axis labels for the extra three panels in the last row
+    for a in ax[-1, -3:]:
+        a.tick_params(axis='both', which='both', labelbottom=False, labelleft=False)
+    fig.supxlabel(r'$log_{10}\ Predicted\ metabolome$', y=0.05)
+    fig.supylabel(r'$log_{10}\ Empirical\ data$', x=0.05)
     fig.suptitle(fig_name, y=0.92)
     file_name = str(k)+'-celltypes/'+net_state+fig_name+'-f-'+str(f)+'.png'
     if figsave_flag:
@@ -340,7 +317,7 @@ def plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_err
     err_df = pd.DataFrame(mean_error.T, columns=f_arr, index=cell_line_names)
     sns.heatmap(data=err_df, linewidth=0.5, cmap='crest', ax=ax)
     file_name = str(k)+'-celltypes/'+net_state+fig_name+'-mean-error.png'
-    plt.title('Predicted vs measured metabolome mean squared error')
+    plt.title('Predicted vs measured metabolome RMSE')
     plt.xlabel('Byproduct fraction, f')
     plt.ylabel('Cell line')
     if figsave_flag:
@@ -383,7 +360,6 @@ k = len(celltype_ID)  # Number of cell types in the model
 ######## Diet as the average of all the Baseline values
 diet = met_baseline.mean(axis=1)
 
-# ic_corr = np.zeros((len(f_arr), len(cell_line_names)))
 ec_corr = np.zeros((len(f_arr), len(cell_line_names)))
 ct_full = np.zeros((len(f_arr), len(cell_line_names))) # For one cell type
 mean_error = np.zeros((len(f_arr), len(cell_line_names)))
@@ -391,9 +367,7 @@ mean_error = np.zeros((len(f_arr), len(cell_line_names)))
 metabolome_pred = np.zeros((len(f_arr), len(cell_line_names), len(ec_metabolome)))
 slopes = np.zeros_like(ec_corr)
 intercepts = np.zeros_like(ec_corr)
-# ec_corr_filt = np.zeros_like(ec_corr)
-# slopes_filt = np.zeros_like(ec_corr)
-# intercepts_filt = np.zeros_like(ec_corr)
+
 
  ## Source for initial and final cell numbers for the various cell lines: https://www.thermofisher.com/in/en/home/references/gibco-cell-culture-basics/cell-culture-protocols/cell-culture-useful-numbers.html
 n_lines = len(core_mean.loc[:, 'Cell line'])
@@ -407,7 +381,7 @@ cellnum_init_all[i_t75] = 2.1e+06
 cellnum_final_all = np.array([23.3e+06]*n_lines)
 cellnum_final_all[i_t75] = 8.4e+06
 
-in_degree_flag = False
+in_degree_flag = True
 if in_degree_flag:
     fig_name = 'with-in-degree'
 else:
@@ -419,11 +393,24 @@ else:
 # k = 3 # Number of cell types
 net_state = 'stat-net/'
 
+metabolome_pred = [[[]]]
+metabolome_measured = [[[]]]
+
 for i, f in enumerate(f_arr):
+    pred_temp = [[]]
+    measured_temp = [[]]
     for j, net in enumerate(all_networks):
         net_corrected, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net)
         # f_count += 1
-        ec_corr[i, j], ct_full[i, j], mean_error[i, j], metabolome_pred[i, j], metabolome_measured, slopes[i, j], intercepts[i, j] = run_network_model(f, diet, cell_line_names[j], k, cellnum_init_all[j], cellnum_final_all[j], net_corrected, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+        ec_corr[i, j], ct_full[i, j], mean_error[i, j], pred, measured, slopes[i, j], intercepts[i, j] = run_network_model(f, diet, cell_line_names[j], k, cellnum_init_all[j], cellnum_final_all[j], net_corrected, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+        pred_temp.append(pred)
+        measured_temp.append(measured)
+    
+    metabolome_pred.append(pred_temp[1:])
+    metabolome_measured.append(measured_temp[1:])
+
+metabolome_pred = metabolome_pred[1:]
+metabolome_measured = metabolome_measured[1:]
 
 # %%
 ######### All plots
@@ -431,7 +418,7 @@ figsave_flag = True
 disp_flag = False
 
 for i, f in enumerate(f_arr):
-    plot_all_corrs(net_state, fig_name, k, f, metabolome_pred[i, :, :], ec_metabolome, figsave_flag, disp_flag)
+    plot_all_corrs(net_state, fig_name, k, f, metabolome_pred[i], metabolome_measured[i], ec_metabolome, figsave_flag, disp_flag)
 
 plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_error, slopes, intercepts, figsave_flag, disp_flag)
 
@@ -455,25 +442,37 @@ ec_corr = np.zeros((len(f_arr), len(cell_line_names)))
 ct_full = np.zeros((len(f_arr), len(cell_line_names))) # For one cell type
 mean_error = np.zeros((len(f_arr), len(cell_line_names)))
 # ct_full = np.zeros((len(f_arr), len(cell_line_names), k)) # For more than one cell type
-metabolome_pred = np.zeros((len(f_arr), len(cell_line_names), len(ec_metabolome)))
+# metabolome_pred = np.zeros((len(f_arr), len(cell_line_names), len(ec_metabolome)))
+metabolome_pred = [[[]]]
+metabolome_measured = [[[]]]
 slopes = np.zeros_like(ec_corr)
 intercepts = np.zeros_like(ec_corr)
 
 # k = 3 # Number of cell types
 net_state = 'random-net/'
 
-for i, f in enumerate(f_arr[:1]):
-    for j, rnet in enumerate(all_random_networks[:1]):
+for i, f in enumerate(f_arr):
+    pred_temp = [[]]
+    measured_temp = [[]]
+    for j, rnet in enumerate(all_random_networks):
         rnet_corrected, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(rnet)
-        ec_corr[i, j], ct_full[i, j], mean_error[i, j], metabolome_pred[i, j], metabolome_measured, slopes[i, j], intercepts[i, j] = run_network_model(f, diet, cell_line_names[j], k, cellnum_init_all[j], cellnum_final_all[j], rnet_corrected, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+        ec_corr[i, j], ct_full[i, j], mean_error[i, j], pred, measured, slopes[i, j], intercepts[i, j] = run_network_model(f, diet, cell_line_names[j], k, cellnum_init_all[j], cellnum_final_all[j], rnet_corrected, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+        pred_temp.append(pred)
+        measured_temp.append(measured)
+
+    metabolome_pred.append(pred_temp[1:])
+    metabolome_measured.append(measured_temp[1:])
+
+metabolome_pred = metabolome_pred[1:]
+metabolome_measured = metabolome_measured[1:]
 
 # %% 
 ########### All plots
-figsave_flag = False
-disp_flag = True
+figsave_flag = True
+disp_flag = False
 
-for i, f in enumerate(f_arr[:1]):
-    plot_all_corrs(net_state, fig_name, k, f, metabolome_pred[i, :, :], ec_metabolome, figsave_flag, disp_flag)
+for i, f in enumerate(f_arr):
+    plot_all_corrs(net_state, fig_name, k, f, metabolome_pred[i], metabolome_measured[i], ec_metabolome, figsave_flag, disp_flag)
 
 plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_error, slopes, intercepts, figsave_flag, disp_flag)
 
