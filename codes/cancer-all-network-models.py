@@ -100,8 +100,9 @@ def get_network(net):
     net_reduced = pd.DataFrame.from_dict({'metabolites': outgoingNodes, 'celltypes':ingoingNodes, 'edgeType':edge_types})
     net = net_reduced.copy()
     net_temp = net.copy()
-    net['edgeType'][net['edgeType']==5] = 2
-    net_temp['edgeType'][net_temp['edgeType']==5] = 3
+    i_both = np.where(net_reduced['edgeType']==5)
+    net.iloc[i_both, -1] = 2#['edgeType'][net['edgeType']==5] = 2
+    net_temp.iloc[i_both, -1] = 3#['edgeType'][net_temp['edgeType']==5] = 3
     net = pd.concat([net, net_temp]).drop_duplicates() #net.append(net_temp).drop_duplicates()
     net_final = net.copy()
 
@@ -238,7 +239,7 @@ def run_network_model(f, diet, col_name, k, cellnum_init, cellnum_max, net, in_d
     diff = np.log10(metabolome_pred+1e-07) - np.log10(metabolome_measured+1e-07)
     mean_error = np.sqrt(np.mean(diff**2))
 
-    return [ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, slope, intercept]#, ec_corr_filtered, slope_filt, intercept_filt
+    return [ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, m2b, b2m]#, ec_corr_filtered, slope_filt, intercept_filt
 
 def generate_random_network(net):
     rnet = net.copy()
@@ -522,21 +523,20 @@ def run_network_optimisation(f, cl, cellnum_init, cellnum_final, net_raw, diet, 
         if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow) / inverseKT)):
             break
 
-    #### Convert adjacency back to network topology
     i_added = x[pos_x_list].astype(bool)
     i_deleted = ~x[pos_x_list].astype(bool)
 
-    links_added, links_deleted = np.zeros(max_links*2), np.zeros(max_links*2)
-    links_added[np.array(pos_x_list)[i_added]] = 1
-    links_deleted[np.array(pos_x_list)[i_deleted]] = 1
+    # links_added, links_deleted = np.zeros(max_links*2), np.zeros(max_links*2)
+    # links_added[np.array(pos_x_list)[i_added]] = 1
+    # links_deleted[np.array(pos_x_list)[i_deleted]] = 1
 
-    consumption_added = links_added[:max_links]
-    production_added = links_added[max_links:]
+    # consumption_added = links_added[:max_links]
+    # production_added = links_added[max_links:]
 
-    consumption_deleted = links_deleted[:max_links]
-    production_deleted = links_deleted[max_links:]
+    # consumption_deleted = links_deleted[:max_links]
+    # production_deleted = links_deleted[max_links:]
 
-    return [x_ori, x, error_list, consumption_added, production_added, consumption_deleted, production_deleted]
+    return [x_ori, x, error_list, len(i_added), len(i_deleted)]#, consumption_added, production_added, consumption_deleted, production_deleted]
 
 
 # %%
@@ -669,7 +669,7 @@ plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_error, 
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-n_reps = 3
+n_reps = 10
 cl = cell_line_names[0]
 f = 0.5
 
@@ -678,52 +678,69 @@ cellnum_final = cellnum_final_all[0]
 x_optim_list = [[]]
 x_ori_list = [[]]
 error_list_all_reps = [[]]
-consumption_added = [[]]
-production_added = [[]]
-consumption_deleted = [[]]
-production_deleted = [[]]
+# consumption_added = [[]]
+# production_added = [[]]
+# consumption_deleted = [[]]
+# production_deleted = [[]]
 
 in_degree_flag = False
 
 for i in np.arange(n_reps):
     net_raw = generate_random_network(all_random_networks[0])
-    x_ori, x, elist, con_add, pro_add, con_del, pro_del = run_network_optimisation(f, cl, cellnum_init, cellnum_final, net_raw, diet, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    x_ori, x, elist, n_added, n_deleted = run_network_optimisation(f, cl, cellnum_init, cellnum_final, net_raw, diet, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
     x_ori_list.append(x_ori)
     x_optim_list.append(x)
     error_list_all_reps.append(elist)
-    consumption_added.append(con_add)
-    production_added.append(pro_add)
-    consumption_deleted.append(con_del)
-    production_deleted.append(pro_del)
+    # consumption_added.append(con_add)
+    # production_added.append(pro_add)
+    # consumption_deleted.append(con_del)
+    # production_deleted.append(pro_del)
 
-    n_added = con_add.sum() + pro_add.sum()
-    n_deleted = con_del.sum() + pro_del.sum()
+    # n_added = con_add.sum() + pro_add.sum()
+    # n_deleted = con_del.sum() + pro_del.sum()
     print('Round', i+1, 'of network optmisation ended with', n_added, 'links added and', n_deleted, 'links deleted.')
     print('------------------')
 
 x_ori_list = np.array(x_ori_list[1:])
 x_optim_list = np.array(x_optim_list[1:])
 error_plot_list = np.array(error_list_all_reps[1:], dtype=object)
-con_add_mean = np.array(consumption_added[1:]).mean(0)
-pro_add_mean = np.array(production_added[1:]).mean(0)
-con_del_mean = np.array(consumption_deleted[1:]).mean(0)
-pro_del_mean = np.array(production_deleted[1:]).mean(0)
+# con_add_mean = np.array(consumption_added[1:]).mean(0)
+# pro_add_mean = np.array(production_added[1:]).mean(0)
+# con_del_mean = np.array(consumption_deleted[1:]).mean(0)
+# pro_del_mean = np.array(production_deleted[1:]).mean(0)
 
-con_add_sd = np.array(consumption_added[1:]).std(0)
-pro_add_sd = np.array(production_added[1:]).std(0)
-con_del_sd = np.array(consumption_deleted[1:]).std(0)
-pro_del_sd = np.array(production_deleted[1:]).std(0)
+# con_add_sd = np.array(consumption_added[1:]).std(0)
+# pro_add_sd = np.array(production_added[1:]).std(0)
+# con_del_sd = np.array(consumption_deleted[1:]).std(0)
+# pro_del_sd = np.array(production_deleted[1:]).std(0)
 
-df_added = pd.DataFrame(np.array([con_add_mean, pro_add_mean]).T, columns=['uptake', 'secretion'])
-df_added.loc[:, 'metabolite'] = np.arange(net_raw.shape[0])
-df_added_long = df_added.melt(value_name='mean', value_vars=['uptake', 'secretion'], id_vars='metabolite', var_name='linkType')
-df_added_long.loc[:, 'SD'] = np.concatenate([con_add_sd, pro_add_sd])
+# df_added = pd.DataFrame(np.array([con_add_mean, pro_add_mean]).T, columns=['uptake', 'secretion'])
+# df_added.loc[:, 'metabolite'] = np.arange(net_raw.shape[0])
+# df_added_long = df_added.melt(value_name='mean', value_vars=['uptake', 'secretion'], id_vars='metabolite', var_name='linkType')
+# df_added_long.loc[:, 'SD'] = np.concatenate([con_add_sd, pro_add_sd])
 
-df_deleted = pd.DataFrame(np.array([con_del_mean, pro_del_mean]).T, columns=['uptake', 'secretion'])
-df_deleted.loc[:, 'metabolite'] = np.arange(net_raw.shape[0])
-df_deleted_long = df_deleted.melt(value_name='count', value_vars=['uptake', 'secretion'], id_vars='metabolite', var_name='linkType')
-df_deleted_long.loc[:, 'SD'] = np.concatenate([con_del_sd, pro_del_sd])
+# df_deleted = pd.DataFrame(np.array([con_del_mean, pro_del_mean]).T, columns=['uptake', 'secretion'])
+# df_deleted.loc[:, 'metabolite'] = np.arange(net_raw.shape[0])
+# df_deleted_long = df_deleted.melt(value_name='count', value_vars=['uptake', 'secretion'], id_vars='metabolite', var_name='linkType')
+# df_deleted_long.loc[:, 'SD'] = np.concatenate([con_del_sd, pro_del_sd])
+
+max_links = MAX_ID_metabolites*MAX_ID_celltypes
+con_links_all = np.array([arr[:max_links] for arr in x_optim_list - x_ori_list])
+pro_links_all = np.array([arr[max_links:] for arr in x_optim_list - x_ori_list])
+df_con_links = pd.DataFrame(con_links_all.T)
+df_pro_links = pd.DataFrame(pro_links_all.T)
+
+df_con_links.loc[:, 'added'] = np.array([np.where(i==1)[0].shape[0] for i in con_links_all.T])
+df_con_links.loc[:, 'removed'] = np.array([np.where(i==-1)[0].shape[0] for i in con_links_all.T])
+df_pro_links.loc[:, 'added'] = np.array([np.where(i==1)[0].shape[0] for i in pro_links_all.T])
+df_pro_links.loc[:, 'removed'] = np.array([np.where(i==-1)[0].shape[0] for i in pro_links_all.T])
+df_con_links.reset_index(names='metabolite', inplace=True)
+df_pro_links.reset_index(names='metabolite', inplace=True)
+
+df_con_plot = df_con_links.melt(id_vars='metabolite', var_name = 'linkType', value_vars=['added', 'removed'], value_name='linkNumber', ignore_index=False)
+df_pro_plot = df_pro_links.melt(id_vars='metabolite', var_name = 'linkType', value_vars=['added', 'removed'], value_name='linkNumber', ignore_index=False)
+
 
 # %%
 ##### Visualising output
@@ -773,23 +790,32 @@ ax[1, 1].set_ylabel('Step number')
 
 f.suptitle('Network optimisation for %s' % cl)
 f.tight_layout()
-f.savefig(fig_path+'/general-summary.png', dpi=300)
+# f.savefig(fig_path+'/general-summary.png', dpi=300)
 
 ##### A visualisation of what is being added and removed on average, over 100 replicate runs
-plt.figure(figsize=(10, 8))
+f, ax = plt.subplots(2, 1, sharex=True, sharey=True, figsize=(16, 8))
 # ax = sns.barplot(data=df_added_long, x='metabolite', y='mean',
 #                 hue='linkType', palette='crest', width=4)
-ax = sns.barplot(data=df_added, x='metabolite', y='secretion')
-plt.tick_params(labelbottom=False)
+sns.barplot(data=df_con_plot, x='metabolite', y='linkNumber', hue='linkType', palette='crest', ax=ax[0])
+ax[0].set_title('Consumption links changed')
+ax[0].set_ylabel('')
 
-# Extract bar coordinates for error bar placement
-x_coords = [p.get_x() + 0.5 * p.get_width() for p in ax.patches]
-y_coords = [p.get_height() for p in ax.patches]
+sns.barplot(data=df_pro_plot, x='metabolite', y='linkNumber', hue='linkType', palette='crest', ax=ax[1])
+plt.tick_params(labelrotation=75)
+ax[1].set_title('Production links changed')
+ax[1].set_ylabel('')
 
-# Add custom error bars
-plt.errorbar(x=x_coords, y=y_coords, yerr=con_add_sd, fmt='none', c='black', capsize=3)
+f.supylabel('Changes per %d replicates' % n_reps)
+f.tight_layout()
 
-plt.savefig(fig_path+'/added-secretion-links.png', dpi=300)
+# # Extract bar coordinates for error bar placement
+# x_coords = [p.get_x() + 0.5 * p.get_width() for p in ax.patches]
+# y_coords = [p.get_height() for p in ax.patches]
+
+# # Add custom error bars
+# plt.errorbar(x=x_coords, y=y_coords, yerr=con_add_sd, fmt='none', c='black', capsize=3)
+
+# plt.savefig(fig_path+'/added-secretion-links.png', dpi=300)
 # %%
 # #### Convert adjacency back to network topology
 # a = np.array(metID_list)
@@ -832,10 +858,10 @@ x_consensus = np.concatenate([x1, x2])
 ### consumption links:
 
 max_links = MAX_ID_metabolites * MAX_ID_celltypes # maximal number of links = number of specis * number of metabolites
-net_ori, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net_raw)
+net_ori, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_random_networks[0])
 
 
-m2b_added = x_consensus[:max_links].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
+m2b_added = x_optim[:max_links].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
 i_add_consumption = np.where(m2b_added!=0)[0] # Indices of added links
 # df_metabolites = pd.DataFrame.from_dict({'oldID': i_nonzero_metabolites, 'newID':list(range(len(i_nonzero_metabolites)))})
 
@@ -844,10 +870,10 @@ b = np.where(m2b_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(m2b_a
 c = [2] * len(b)
 c_index = net_ori.index[i_add_consumption]
 net_added_consumption = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c},
-                                     index=c_index)
+                                    index=c_index)
 
 ### production links:
-b2m_added = x_consensus[max_links:].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
+b2m_added = x_optim[max_links:].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
 i_add_production = np.where(b2m_added!=0)[0]
 
 a = net_ori.iloc[:len(i_nonzero_metabolites), 0].values[i_add_production]
@@ -857,8 +883,9 @@ p_index = net_ori.index[i_add_production]
 net_added_production = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c},
                                     index=p_index)
 
-net = pd.concat([net_added_consumption, net_added_production])
-ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, slope, intercept = run_network_model(f_arr[0], diet, cell_line_names[0], k, cellnum_init_all[0], cellnum_final_all[0], net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+net_optim = pd.concat([net_added_consumption, net_added_production])
+
+ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, slope, intercept = run_network_model(f_arr[0], diet, cell_line_names[0], k, cellnum_init_all[0], cellnum_final_all[0], net_optim, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
 
 
