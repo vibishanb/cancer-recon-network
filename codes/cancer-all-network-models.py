@@ -99,7 +99,7 @@ def get_network(net):
 
     net_reduced = pd.DataFrame.from_dict({'metabolites': outgoingNodes, 'celltypes':ingoingNodes, 'edgeType':edge_types})
     i_secretion = np.where(np.isin(net_reduced.iloc[:, -1], [3, 5]))[0]
-    i_consumption = np.where(np.isin(net_reduced.iloc[:, -1], [3, 5]))[0]
+    i_consumption = np.where(np.isin(net_reduced.iloc[:, -1], [2, 5]))[0]
 
     net_copy1 = net_reduced.copy()
     net_copy2 = net_reduced.copy()
@@ -448,11 +448,11 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, net_ori, f, col_name, diet, in_d
         rmse_mets_dev = mean_error
 
     else:
-        var_expl = -1
+        # var_expl = -1
         rmse_mets_dev = 7
     
 
-    hyper_reg = 0.1
+    hyper_reg = 0.00001
     pred_errorTotal = rmse_mets_dev + hyper_reg*n_changed #pred_error2 + hyper_reg * pred_error2 - (pred_error3 - 20) * 0.003 # with reward
     
     return [i_used_mets, pred_errorTotal, mets_dev, rmse_mets_dev]
@@ -507,7 +507,7 @@ def run_network_optimisation(f, cl, cellnum_init, cellnum_final, net_raw, diet, 
     x = x_ori.copy()
 
     # Network optimisation begins here
-    inverseKT = 1.25
+    kT = 0.0005
     Twindow = 500
     numStepsNotAdded = 0
     numAdditions = 0
@@ -527,7 +527,7 @@ def run_network_optimisation(f, cl, cellnum_init, cellnum_final, net_raw, diet, 
         i_used_mets, error_after, bias_metabolome, log_bias = fun(x) # Calculate prediction error with the modified network
         prior_prob = calculate_priors(bias_metabolome)
 
-        if np.random.uniform(0,1,1)[0] < np.exp((inverseKT)*np.abs(error_after)): # If the reduction in error is large enough, the proposed link addition/removal is accepted
+        if np.random.uniform(0,1,1)[0] < np.min([1, np.exp((error_before - error_after)/kT)]): # If the reduction in error is large enough, the proposed link addition/removal is accepted
             error_before = error_after
             if x[i_x] == 1:
                 # print('Addition accepted, error is ', error_before)
@@ -554,7 +554,7 @@ def run_network_optimisation(f, cl, cellnum_init, cellnum_final, net_raw, diet, 
             x[i_x] = x_ori[i_x] # Maintain the original state
             numStepsNotAdded += 1
         error_window.append(error_before)
-        if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow) / inverseKT)):
+        if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow)*kT)):
             break
 
     i_added = x[pos_x_list].astype(bool)
@@ -704,7 +704,7 @@ plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_error, 
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-n_reps = 5
+n_reps = 50
 cl = cell_line_names[0]
 f = 0.5
 
@@ -737,6 +737,7 @@ for i in np.arange(n_reps):
     # n_added = con_add.sum() + pro_add.sum()
     # n_deleted = con_del.sum() + pro_del.sum()
     print('Round', i+1, 'of network optmisation ended with', n_added, 'links added and', n_deleted, 'links deleted.')
+    print('The final error is', elist[-1])
     print('------------------')
 
 x_ori_list = np.array(x_ori_list[1:])
@@ -837,29 +838,26 @@ f.tight_layout()
 # f.savefig(fig_path+'/general-summary.png', dpi=300)
 
 ##### A visualisation of what is being added and removed on average, over 100 replicate runs
-f, ax = plt.subplots(2, 1, sharex=True, sharey=True, figsize=(16, 8))
-# ax = sns.barplot(data=df_added_long, x='metabolite', y='mean',
-#                 hue='linkType', palette='crest', width=4)
-sns.barplot(data=df_con_plot, x='metabolite', y='linkNumber', hue='linkType', palette='crest', ax=ax[0])
-ax[0].set_title('Consumption links changed')
+met_labels = all_networks[0].loc[:, 'Metabolite'].values
+max_val = np.concatenate([df_con_plot['linkNumber'].values, df_pro_plot['linkNumber'].values]).max()
+
+f, ax = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(16, 18))
+sns.heatmap(data=df_con_links.iloc[:, -2:], cmap='crest', ax=ax[0],
+            yticklabels=met_labels,
+            vmin=0, vmax=max_val, cbar=False)
+ax[0].set_title('Consumption')
 ax[0].set_ylabel('')
 
-sns.barplot(data=df_pro_plot, x='metabolite', y='linkNumber', hue='linkType', palette='crest', ax=ax[1])
-plt.tick_params(labelrotation=75)
-ax[1].set_title('Production links changed')
+sns.heatmap(data=df_pro_links.iloc[:, -2:], cmap='crest', ax=ax[1],
+            yticklabels=met_labels,
+            vmin=0, vmax=max_val)
+ax[1].set_title('Production')
 ax[1].set_ylabel('')
 
-f.supylabel('Changes per %d replicates' % n_reps)
+f.supxlabel('Changes per %d replicates' % n_reps)
 f.tight_layout()
 
-# # Extract bar coordinates for error bar placement
-# x_coords = [p.get_x() + 0.5 * p.get_width() for p in ax.patches]
-# y_coords = [p.get_height() for p in ax.patches]
-
-# # Add custom error bars
-# plt.errorbar(x=x_coords, y=y_coords, yerr=con_add_sd, fmt='none', c='black', capsize=3)
-
-# plt.savefig(fig_path+'/added-secretion-links.png', dpi=300)
+# f.savefig(fig_path+'/added-secretion-links.png', dpi=300)
 # %%
 # #### Convert adjacency back to network topology
 # a = np.array(metID_list)
