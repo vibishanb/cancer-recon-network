@@ -453,7 +453,7 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, net_ori, f, col_name, diet, in_d
     
 
     hyper_reg = 0.00001
-    pred_errorTotal = rmse_mets_dev + hyper_reg*n_changed #pred_error2 + hyper_reg * pred_error2 - (pred_error3 - 20) * 0.003 # with reward
+    pred_errorTotal = rmse_mets_dev #+ hyper_reg*n_changed #pred_error2 + hyper_reg * pred_error2 - (pred_error3 - 20) * 0.003 # with reward
     
     return [i_used_mets, pred_errorTotal, mets_dev, rmse_mets_dev]
 
@@ -507,7 +507,7 @@ def run_network_optimisation(f, cl, cellnum_init, cellnum_final, net_raw, diet, 
     x = x_ori.copy()
 
     # Network optimisation begins here
-    kT = 0.0005
+    kT = 0.0003
     Twindow = 500
     numStepsNotAdded = 0
     numAdditions = 0
@@ -880,86 +880,132 @@ f.tight_layout()
 
 # %%
 ##### Check out the best performing network
-i_best_net = np.where(final_error == final_error.min())[0]
+pred_error_change = np.array([list[0]-list[-1] for list in log_bias_list])
+
+i_best_net = np.where(pred_error_change == pred_error_change.max())[0]
 x_ori = x_ori_list[i_best_net].flatten()
 x_optim = x_optim_list[i_best_net].flatten()
 
 
 # %%
-##### Sample consensus network from the above 100 runs
-x1, x2 = np.zeros(MAX_ID_metabolites), np.zeros(MAX_ID_metabolites)
-x1[np.where(np.array(consumption_added[1:]).sum(0) >= 10)[0]] = 1
-x2[np.where(np.array(production_added[1:]).sum(0) >= 10)[0]] = 1
-
-x1[np.where(np.array(consumption_deleted[1:]).sum(0) >= 10)[0]] = 0
-x2[np.where(np.array(production_deleted[1:]).sum(0) >= 10)[0]] = 0
-
-x_consensus = np.concatenate([x1, x2])
-
-######## Convert x to net structure (convert the adjacency matrix into the edge list):
-### consumption links:
+######## Convert x to net structure (convert the adjacency matrix into the edge list)
 
 max_links = MAX_ID_metabolites * MAX_ID_celltypes # maximal number of links = number of specis * number of metabolites
-net_ori, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_random_networks[0])
+net_temp, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_random_networks[0])
 
+######## Original network
+x_consumption = x_ori[:max_links]
+x_production = x_ori[max_links:]
 
-m2b_added = x_optim[:max_links].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
-i_add_consumption = np.where(m2b_added!=0)[0] # Indices of added links
-# df_metabolites = pd.DataFrame.from_dict({'oldID': i_nonzero_metabolites, 'newID':list(range(len(i_nonzero_metabolites)))})
+a = net_temp.iloc[:max_links, 0].values
+b = net_temp.iloc[:max_links, 1].values
+c = np.where(x_consumption, 2, 0)
+net_added_consumption = pd.DataFrame({net_temp.columns[0]: a,
+                                        net_temp.columns[1]: b,
+                                        net_temp.columns[2]: c})
 
-a = net_ori.iloc[:len(i_nonzero_metabolites), 0].values[i_add_consumption]
-b = np.where(m2b_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(m2b_added >= thres)[1]]
-c = [2] * len(b)
-c_index = net_ori.index[i_add_consumption]
-net_added_consumption = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c},
-                                    index=c_index)
+a = net_temp.iloc[max_links:, 0].values
+b = net_temp.iloc[max_links:, 1].values
+c = np.where(x_production, 3, 0)
+net_added_production = pd.DataFrame({net_temp.columns[0]: a,
+                                        net_temp.columns[1]: b,
+                                        net_temp.columns[2]: c})
+net_ori = pd.concat([net_added_consumption, net_added_production])
 
-### production links:
-b2m_added = x_optim[max_links:].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
-i_add_production = np.where(b2m_added!=0)[0]
+####### Optimised network
+x_consumption = x_optim[:max_links]
+x_production = x_optim[max_links:]
 
-a = net_ori.iloc[:len(i_nonzero_metabolites), 0].values[i_add_production]
-b = np.where(b2m_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(b2m_added >= thres)[1]]
-c = [3] * len(b)#np.where(b2m_added >= thres)[1].shape[0]
-p_index = net_ori.index[i_add_production]
-net_added_production = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c},
-                                    index=p_index)
+a = net_temp.iloc[:max_links, 0].values
+b = net_temp.iloc[:max_links, 1].values
+c = np.where(x_consumption, 2, 0)
+net_added_consumption = pd.DataFrame({net_temp.columns[0]: a,
+                                        net_temp.columns[1]: b,
+                                        net_temp.columns[2]: c})
 
+a = net_temp.iloc[max_links:, 0].values
+b = net_temp.iloc[max_links:, 1].values
+c = np.where(x_production, 3, 0)
+net_added_production = pd.DataFrame({net_temp.columns[0]: a,
+                                        net_temp.columns[1]: b,
+                                        net_temp.columns[2]: c})
 net_optim = pd.concat([net_added_consumption, net_added_production])
 
-ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, slope, intercept = run_network_model(f_arr[0], diet, cell_line_names[0], k, cellnum_init_all[0], cellnum_final_all[0], net_optim, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+# #### Consumption links
+# m2b_added = x_ori[:max_links].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
+# i_add_consumption = np.where(m2b_added!=0)[0] # Indices of added links
 
+# a = net_temp.iloc[:len(i_nonzero_metabolites), 0].values[i_add_consumption]
+# b = np.where(m2b_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(m2b_added >= thres)[1]]
+# c = [2] * len(b)
+# c_index = net_temp.index[i_add_consumption]
+# net_added_consumption = pd.DataFrame({net_temp.columns[0]:list(a), net_temp.columns[1]:list(b), net_temp.columns[2]:c},
+#                                     index=c_index)
 
+# #### Production links
+# b2m_added = x_optim[max_links:].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
+# i_add_production = np.where(b2m_added!=0)[0]
+
+# a = net_temp.iloc[:len(i_nonzero_metabolites), 0].values[i_add_production]
+# b = np.where(b2m_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(b2m_added >= thres)[1]]
+# c = [3] * len(b)#np.where(b2m_added >= thres)[1].shape[0]
+# p_index = net_temp.index[i_add_production]
+# net_added_production = pd.DataFrame({net_temp.columns[0]:list(a), net_temp.columns[1]:list(b), net_temp.columns[2]:c},
+#                                     index=p_index)
+
+# net_ori = pd.concat([net_added_consumption, net_added_production])
+
+# ####### Optimsed network
+# #### Consumption links
+# m2b_added = x_optim[:max_links].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
+# i_add_consumption = np.where(m2b_added!=0)[0] # Indices of added links
+
+# a = net_temp.iloc[:len(i_nonzero_metabolites), 0].values[i_add_consumption]
+# b = np.where(m2b_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(m2b_added >= thres)[1]]
+# c = [2] * len(b)
+# c_index = net_temp.index[i_add_consumption]
+# net_added_consumption = pd.DataFrame({net_temp.columns[0]:list(a), net_temp.columns[1]:list(b), net_temp.columns[2]:c},
+#                                     index=c_index)
+
+# #### Production links
+# b2m_added = x_optim[max_links:].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
+# i_add_production = np.where(b2m_added!=0)[0]
+
+# a = net_temp.iloc[:len(i_nonzero_metabolites), 0].values[i_add_production]
+# b = np.where(b2m_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(b2m_added >= thres)[1]]
+# c = [3] * len(b)#np.where(b2m_added >= thres)[1].shape[0]
+# p_index = net_temp.index[i_add_production]
+# net_added_production = pd.DataFrame({net_temp.columns[0]:list(a), net_temp.columns[1]:list(b), net_temp.columns[2]:c},
+#                                     index=p_index)
+
+# net_optim = pd.concat([net_added_consumption, net_added_production])
 
 # %%
 ######### Change in error with additions and deletions
-# f = f_arr[0]
-# ec_corr_old, ct_full_old, mean_error_old, metabolome_pred_old, metabolome_measured_old, slope_old, intercept_old = run_network_model(f, diet, cl, k, cellnum_init_all[0], cellnum_final_all[0], net_ori, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+f = f_arr[0]
+ec_corr_old, ct_full_old, mean_error_old, metabolome_pred_old, metabolome_measured_old, slope_old, intercept_old = run_network_model(f, diet, cl, k, cellnum_init_all[0], cellnum_final_all[0], net_ori, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
-# ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, slope, intercept = run_network_model(f, diet, cl, k, cellnum_init_all[0], cellnum_final_all[0], net_new, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, slope, intercept = run_network_model(f, diet, cl, k, cellnum_init_all[0], cellnum_final_all[0], net_optim, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
-# print('Metabolome deviation with old network is: ', mean_error_old)
-# print('Metabolome deviation with improved network is: ', mean_error)
-# print('------------------------------------------------------------------------')
-# plt.figure()
-# plt.plot(error_list, 'ko-')
-# plt.ylabel('error')
-# plt.xlabel('number of add/remove steps')
+print('Metabolome deviation with old network is: ', mean_error_old)
+print('Metabolome deviation with improved network is: ', mean_error)
+print('------------------------------------------------------------------------')
 
-# fig, ax = plt.subplots(1, 2, sharey=True, figsize=(7, 4))
-# ax[0].scatter(np.log10(metabolome_pred_old+1e-7), np.log10(metabolome_measured_old+1e-7), c='k', s=8)
-# ax[0].plot([-7, 1], [-7, 1],'k-')
-# ax[0].set_title('Old network')
-# # ax[0].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
-# ax[0].set_ylabel(r'$log_{10}\ Empirical\ data$')
-# ax[1].scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=8)
-# ax[1].plot([-7, 1], [-7, 1], 'k-')
-# ax[1].set_title('New network')
-# # ax[1].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
-# # ax[1].set_ylabel(r'$log_{10}\ Empirical\ data$')
-# fig.supxlabel(r'$log_{10}\ Predicted\ metabolome$')
-# plt.tight_layout()
-# plt.show()
-# # plt.scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=4)
+fig, ax = plt.subplots(1, 2, sharey=True, figsize=(7, 4))
+ax[0].scatter(np.log10(metabolome_pred_old+1e-7), np.log10(metabolome_measured_old+1e-7), c='k', s=9)
+ax[0].plot([-7, 1], [-7, 1],'k-')
+ax[0].set_title('Old network')
+# ax[0].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
+ax[0].set_ylabel(r'$log_{10}\ Empirical\ data$')
+ax[1].scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=9)
+ax[1].plot([-7, 1], [-7, 1], 'k-')
+ax[1].set_title('New network')
+# ax[1].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
+# ax[1].set_ylabel(r'$log_{10}\ Empirical\ data$')
+fig.supxlabel(r'$log_{10}\ Predicted\ metabolome$')
+plt.tight_layout()
+plt.show()
+# plt.scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=4)
     
     
+# %%
