@@ -848,14 +848,26 @@ sns.heatmap(data=df_con_links.iloc[:, -2:], cmap='crest', ax=ax[0],
 ax[0].set_title('Consumption')
 ax[0].set_ylabel('')
 
+# sns.barplot(data=df_con_plot, x='metabolite', y='linkNumber', hue='linkType', palette='crest', ax=ax[0])
+# ax[0].set_title('Consumption links changed')
+# ax[0].set_ylabel('')
+
 sns.heatmap(data=df_pro_links.iloc[:, -2:], cmap='crest', ax=ax[1],
             yticklabels=met_labels,
             vmin=0, vmax=max_val)
 ax[1].set_title('Production')
 ax[1].set_ylabel('')
 
+# f.supylabel('Changes per %d replicates' % n_reps)
 f.supxlabel('Changes per %d replicates' % n_reps)
 f.tight_layout()
+
+# # Extract bar coordinates for error bar placement
+# x_coords = [p.get_x() + 0.5 * p.get_width() for p in ax.patches]
+# y_coords = [p.get_height() for p in ax.patches]
+
+# # Adding custom error bars
+# plt.errorbar(x=x_coords, y=y_coords, yerr=con_add_sd, fmt='none', c='black', capsize=3)
 
 # f.savefig(fig_path+'/added-secretion-links.png', dpi=300)
 # %%
