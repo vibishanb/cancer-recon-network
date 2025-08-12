@@ -18,6 +18,7 @@ from scipy.sparse import csr_matrix
 import numpy.matlib
 from scipy.optimize import minimize
 from scipy.stats import pearsonr
+import networkx as nx
 
 import os
 
@@ -704,7 +705,7 @@ plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_error, 
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-n_reps = 50
+n_reps = 5
 cl = cell_line_names[0]
 f = 0.5
 
@@ -943,54 +944,6 @@ net_added_production = pd.DataFrame({net_temp.columns[0]: a,
                                         net_temp.columns[2]: c})
 net_optim = pd.concat([net_added_consumption, net_added_production])
 
-# #### Consumption links
-# m2b_added = x_ori[:max_links].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
-# i_add_consumption = np.where(m2b_added!=0)[0] # Indices of added links
-
-# a = net_temp.iloc[:len(i_nonzero_metabolites), 0].values[i_add_consumption]
-# b = np.where(m2b_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(m2b_added >= thres)[1]]
-# c = [2] * len(b)
-# c_index = net_temp.index[i_add_consumption]
-# net_added_consumption = pd.DataFrame({net_temp.columns[0]:list(a), net_temp.columns[1]:list(b), net_temp.columns[2]:c},
-#                                     index=c_index)
-
-# #### Production links
-# b2m_added = x_optim[max_links:].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
-# i_add_production = np.where(b2m_added!=0)[0]
-
-# a = net_temp.iloc[:len(i_nonzero_metabolites), 0].values[i_add_production]
-# b = np.where(b2m_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(b2m_added >= thres)[1]]
-# c = [3] * len(b)#np.where(b2m_added >= thres)[1].shape[0]
-# p_index = net_temp.index[i_add_production]
-# net_added_production = pd.DataFrame({net_temp.columns[0]:list(a), net_temp.columns[1]:list(b), net_temp.columns[2]:c},
-#                                     index=p_index)
-
-# net_ori = pd.concat([net_added_consumption, net_added_production])
-
-# ####### Optimsed network
-# #### Consumption links
-# m2b_added = x_optim[:max_links].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
-# i_add_consumption = np.where(m2b_added!=0)[0] # Indices of added links
-
-# a = net_temp.iloc[:len(i_nonzero_metabolites), 0].values[i_add_consumption]
-# b = np.where(m2b_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(m2b_added >= thres)[1]]
-# c = [2] * len(b)
-# c_index = net_temp.index[i_add_consumption]
-# net_added_consumption = pd.DataFrame({net_temp.columns[0]:list(a), net_temp.columns[1]:list(b), net_temp.columns[2]:c},
-#                                     index=c_index)
-
-# #### Production links
-# b2m_added = x_optim[max_links:].reshape((MAX_ID_metabolites, MAX_ID_celltypes))
-# i_add_production = np.where(b2m_added!=0)[0]
-
-# a = net_temp.iloc[:len(i_nonzero_metabolites), 0].values[i_add_production]
-# b = np.where(b2m_added==1)[1]#np.arange(len(i_nonzero_celltypes))[np.where(b2m_added >= thres)[1]]
-# c = [3] * len(b)#np.where(b2m_added >= thres)[1].shape[0]
-# p_index = net_temp.index[i_add_production]
-# net_added_production = pd.DataFrame({net_temp.columns[0]:list(a), net_temp.columns[1]:list(b), net_temp.columns[2]:c},
-#                                     index=p_index)
-
-# net_optim = pd.concat([net_added_consumption, net_added_production])
 
 # %%
 ######### Change in error with additions and deletions
@@ -1020,4 +973,26 @@ plt.show()
 # plt.scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=4)
     
     
+# %%
+net_plot = net_optim.copy()
+
+celltype_labels = ['A', 'B', 'C', 'D', 'E']
+net_plot.iloc[:, 1] = [celltype_labels[i] for i in net_ori.loc[:, 'celltypes'].values]
+
+net_plot.columns = np.array(['source', 'target', 'edge_attr'])
+net_plot = net_plot[net_plot.iloc[:, -1] != 0]
+net_temp = net_plot.copy()
+
+i_flip = np.where(net_temp.iloc[:, -1] == 3)[0]
+net_plot.iloc[i_flip, 0] = net_temp.iloc[i_flip, 1]
+net_plot.iloc[i_flip, 1] = net_temp.iloc[i_flip, 0]
+
+G_con = nx.from_pandas_edgelist(net_plot[net_plot.iloc[:, -1]==2].iloc[:, :2], source='source', target='target', create_using=nx.DiGraph)
+nx.draw_networkx(G_con, arrows=True, pos=nx.spring_layout(G_con), node_size=350)
+plt.show()
+
+G_pro = nx.from_pandas_edgelist(net_plot[net_plot.iloc[:, -1]==3].iloc[:, :2], source='source', target='target', create_using=nx.DiGraph)
+nx.draw_networkx(G_pro, arrows=True, pos=nx.spring_layout(G_pro), node_size=350)
+plt.show()
+
 # %%
