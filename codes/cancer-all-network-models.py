@@ -466,6 +466,8 @@ def calculate_priors(bias_metabolome):
     prior_temp = np.exp(np.abs(bias_metabolome))/np.exp(np.abs(bias_metabolome)).sum(0)
     consumption_prior[i_con_prior] = prior_temp[i_con_prior]
     production_prior[i_pro_prior] = prior_temp[i_pro_prior]
+    consumption_prior = np.repeat(consumption_prior, MAX_ID_celltypes)
+    production_prior = np.repeat(production_prior, MAX_ID_celltypes)
     prior_prob = np.concatenate([consumption_prior, production_prior]) # Appending the same array twice, first for consumption links and then for production links i.e., prior probability for a given metabolite depends on the error in prediction but is the same for consumption and production links
     prior_prob += 1/230 # All links have some constant probability to be chosen at random, independent of the bias in the metabolome prediction
     prior_prob /= prior_prob.sum(0) # Normalise to [0, 1]
@@ -871,25 +873,6 @@ f.tight_layout()
 # plt.errorbar(x=x_coords, y=y_coords, yerr=con_add_sd, fmt='none', c='black', capsize=3)
 
 # f.savefig(fig_path+'/added-secretion-links.png', dpi=300)
-# %%
-# #### Convert adjacency back to network topology
-# a = np.array(metID_list)
-# b = np.array(celltypeID_list)
-# c = np.ones([len(metID_list)], dtype = int) * 3
-# c[np.where(np.array(pos_x_list) < max_links)[0]] = 2
-# net_modified = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c})
-# i_added = x[pos_x_list].astype(bool)
-# i_deleted = ~x[pos_x_list].astype(bool)
-# net_added = net_modified[i_added]
-# net_deleted = net_modified[i_deleted]
-
-# net_new = pd.concat([net_ori, net_added, net_deleted]).drop_duplicates(keep=False)
-
-# print('The original network has',len(net_ori),'links')
-# print('The new network has',len(net_new),'links')
-# print('There are',len(net_added),'links added')
-# print('There are',len(net_deleted),'links deleted')
-
 
 # %%
 ##### Check out the best performing network
@@ -988,11 +971,13 @@ net_plot.iloc[i_flip, 0] = net_temp.iloc[i_flip, 1]
 net_plot.iloc[i_flip, 1] = net_temp.iloc[i_flip, 0]
 
 G_con = nx.from_pandas_edgelist(net_plot[net_plot.iloc[:, -1]==2].iloc[:, :2], source='source', target='target', create_using=nx.DiGraph)
-nx.draw_networkx(G_con, arrows=True, pos=nx.spring_layout(G_con), node_size=350)
+right, left = nx.bipartite.sets(G_con)
+nx.draw_networkx(G_con, arrows=True, pos=nx.bipartite_layout(G_con, left), node_size=350)
 plt.show()
 
 G_pro = nx.from_pandas_edgelist(net_plot[net_plot.iloc[:, -1]==3].iloc[:, :2], source='source', target='target', create_using=nx.DiGraph)
-nx.draw_networkx(G_pro, arrows=True, pos=nx.spring_layout(G_pro), node_size=350)
+right, left = nx.bipartite.sets(G_pro)
+nx.draw_networkx(G_pro, arrows=True, pos=nx.bipartite_layout(G_pro, right), node_size=350)
 plt.show()
 
 # %%
