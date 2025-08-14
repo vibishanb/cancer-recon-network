@@ -42,16 +42,16 @@ my_locator = MaxNLocator(6)
 
 color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
 
-def figure_size_setting(WIDTH):
-    #WIDTH = 700.0  # the number latex spits out
-    FACTOR = 0.8  # the fraction of the width you'd like the figure to occupy
-    fig_width_pt  = WIDTH * FACTOR
-    inches_per_pt = 1.0 / 72.27
-    golden_ratio  = (np.sqrt(5) - 1.0) / 2.0  # because it looks good
-    fig_width_in  = fig_width_pt * inches_per_pt  # figure width in inches
-    fig_height_in = fig_width_in * golden_ratio   # figure height in inches
-    fig_dims    = [fig_width_in, fig_height_in] # fig dims as a list
-    return fig_dims
+# def figure_size_setting(WIDTH):
+#     #WIDTH = 700.0  # the number latex spits out
+#     FACTOR = 0.8  # the fraction of the width you'd like the figure to occupy
+#     fig_width_pt  = WIDTH * FACTOR
+#     inches_per_pt = 1.0 / 72.27
+#     golden_ratio  = (np.sqrt(5) - 1.0) / 2.0  # because it looks good
+#     fig_width_in  = fig_width_pt * inches_per_pt  # figure width in inches
+#     fig_height_in = fig_width_in * golden_ratio   # figure height in inches
+#     fig_dims    = [fig_width_in, fig_height_in] # fig dims as a list
+#     return fig_dims
 
 # %%
 ######## Import the pickled file containing all processed data which are useful for simulations (the processing is
@@ -957,27 +957,36 @@ plt.show()
     
     
 # %%
-net_plot = net_optim.copy()
+net_plot = net_ori.copy()
+df_summary = pd.concat([df_con_links, df_pro_links])
+df_summary.loc[:, 'mean'] = df_summary.iloc[:, 1:n_reps].mean(1)
 
 celltype_labels = ['A', 'B', 'C', 'D', 'E']
 net_plot.iloc[:, 1] = [celltype_labels[i] for i in net_ori.loc[:, 'celltypes'].values]
 
-net_plot.columns = np.array(['source', 'target', 'edge_attr'])
-net_plot = net_plot[net_plot.iloc[:, -1] != 0]
+net_plot.columns = np.array(['source', 'target', 'edgeType'])
+net_plot.loc[:, 'edge_attr'] = df_summary.loc[:, 'mean'].values
+net_plot = net_plot[net_plot.loc[:, 'edgeType'] != 0]
 net_temp = net_plot.copy()
 
-i_flip = np.where(net_temp.iloc[:, -1] == 3)[0]
+i_flip = np.where(net_temp.loc[:, 'edgeType'] == 3)[0]
 net_plot.iloc[i_flip, 0] = net_temp.iloc[i_flip, 1]
 net_plot.iloc[i_flip, 1] = net_temp.iloc[i_flip, 0]
 
-G_con = nx.from_pandas_edgelist(net_plot[net_plot.iloc[:, -1]==2].iloc[:, :2], source='source', target='target', create_using=nx.DiGraph)
+fig, ax = plt.subplots(1, 2, figsize=(12, 17))
+G_con = nx.from_pandas_edgelist(net_plot[net_plot.loc[:, 'edgeType']==2], source='source', target='target', edge_attr='edge_attr', create_using=nx.DiGraph)
 right, left = nx.bipartite.sets(G_con)
-nx.draw_networkx(G_con, arrows=True, pos=nx.bipartite_layout(G_con, left), node_size=350)
-plt.show()
 
-G_pro = nx.from_pandas_edgelist(net_plot[net_plot.iloc[:, -1]==3].iloc[:, :2], source='source', target='target', create_using=nx.DiGraph)
+nx.draw_networkx(G_con, arrows=True, pos=nx.bipartite_layout(G_con, left),
+                 node_size=150, ax=ax[0])
+ax[0].set_title('Uptake links')
+
+G_pro = nx.from_pandas_edgelist(net_plot[net_plot.loc[:, 'edgeType']==3], source='source', target='target', edge_attr='edge_attr', create_using=nx.DiGraph)
 right, left = nx.bipartite.sets(G_pro)
-nx.draw_networkx(G_pro, arrows=True, pos=nx.bipartite_layout(G_pro, right), node_size=350)
-plt.show()
+nx.draw_networkx(G_pro, arrows=True, pos=nx.bipartite_layout(G_pro, right),
+                 node_size=150, ax=ax[1])
+ax[1].set_title('Secretion links')
+
+fig.tight_layout()
 
 # %%
