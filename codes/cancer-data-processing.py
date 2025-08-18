@@ -150,7 +150,7 @@ for i in range(n_lines):
     all_networks.append(curr_net)
 
 ## Only un-comment if using more than one cell type
-k = 3 # Final number of cell types assumed for the current iteration of the model
+k = 2 # Final number of cell types assumed for the current iteration of the model
 ## Update celltype_IDs and all recon networks for the final number of cell types assumed
 celltype_all = pd.read_csv('../input-data/prior-celltype-abundance.txt', sep=',')
 celltype_all = celltype_all.iloc[:k, ] # Selecting number of cell types
