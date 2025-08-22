@@ -149,27 +149,27 @@ for i in range(n_lines):
     curr_net.iloc[:, -1] = np.where(core_mean.iloc[i, 1:] == 0, 0, 5)
     all_networks.append(curr_net)
 
-## Only un-comment if using more than one cell type
-k = 2 # Final number of cell types assumed for the current iteration of the model
-## Update celltype_IDs and all recon networks for the final number of cell types assumed
-celltype_all = pd.read_csv('../input-data/prior-celltype-abundance.txt', sep=',')
-celltype_all = celltype_all.iloc[:k, ] # Selecting number of cell types
-celltype_all.head()
-### Randomly sampled relative abundances of the cell types
-rand = np.random.uniform(0, 1, k)
-celltype_all['Mean'] = rand/rand.sum()
-celltype_ID = celltype_all['celltype_id']
-#print((celltype_ID!=0).sum())
-celltype = celltype_all[celltype_ID!=0].loc[:,'Mean']
-celltype_ID = celltype_ID[celltype_ID!=0]
+# ## Only un-comment if using more than one cell type
+# k = 3 # Final number of cell types assumed for the current iteration of the model
+# ## Update celltype_IDs and all recon networks for the final number of cell types assumed
+# celltype_all = pd.read_csv('../input-data/prior-celltype-abundance.txt', sep=',')
+# celltype_all = celltype_all.iloc[:k, ] # Selecting number of cell types
+# celltype_all.head()
+# ### Randomly sampled relative abundances of the cell types
+# rand = np.random.uniform(0, 1, k)
+# celltype_all['Mean'] = rand/rand.sum()
+# celltype_ID = celltype_all['celltype_id']
+# #print((celltype_ID!=0).sum())
+# celltype = celltype_all[celltype_ID!=0].loc[:,'Mean']
+# celltype_ID = celltype_ID[celltype_ID!=0]
 
-for i, net in enumerate(all_networks):
-    valid_net = net.copy()
-    net_temp = net.copy()
-    for c in np.arange(2, k+1):
-        net_temp.loc[:, 'celltypes_ID'] = c # Second cell type with the same network
-        valid_net = pd.concat([valid_net, net_temp]) # Network with selected number of cell types
-    all_networks[i] = valid_net.copy()
+# for i, net in enumerate(all_networks):
+#     valid_net = net.copy()
+#     net_temp = net.copy()
+#     for c in np.arange(2, k+1):
+#         net_temp.loc[:, 'celltypes_ID'] = c # Second cell type with the same network
+#         valid_net = pd.concat([valid_net, net_temp]) # Network with selected number of cell types
+#     all_networks[i] = valid_net.copy()
 
 
 # %%

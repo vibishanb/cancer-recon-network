@@ -213,7 +213,7 @@ def run_network_model(f, diet, col_name, k, cellnum_init, cellnum_max, net, in_d
         # fun = lambda ct: pred_error(ct, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes)
         bnds = ((cellnum_init, cellnum_max), ) * len(ct0)
         constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_max}
-        res = minimize(calc_pred_error, ct0, args=my_args, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+        res = minimize(calc_pred_error, ct0, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
         ct_full = res.x #res.x.max()/cellnum_max
         
     #### For k = 1, no model fitting, final cell number is taken directly from cell number at confluency
@@ -246,14 +246,28 @@ def run_network_model(f, diet, col_name, k, cellnum_init, cellnum_max, net, in_d
 
     return [ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured]#, slope_filt, intercept_filt
 
-def generate_random_network(net):
+def generate_random_network(net, bias_metabolome):
     rnet = net.copy()
-    n_unused = (rnet.iloc[:, -1] == 0).sum() # Number of unused metabolites
-    n_edges = rnet.shape[0]
-    random_edges = np.random.choice([2, 3, 5], n_edges, replace=True) #Replace original nodes with some random choice of 2, 3 or 5
-    random_i_unused = np.random.choice(np.arange(len(rnet)), n_unused, replace=False) # Randomly assigned unused status to the same number of metabolites as in the original network
-    rnet.iloc[:, -1] = random_edges.copy()
-    rnet.iloc[random_i_unused, -1] = 0
+    # n_unused = (rnet.iloc[:, -1] == 0).sum() # Number of unused metabolites
+    # n_edges = rnet.shape[0]
+    i_consumption_edges = np.where(bias_metabolome > 0)[0]
+    i_production_edges = np.where(bias_metabolome < 0)[0]
+
+    con_edges = np.random.choice([0, 2], len(i_consumption_edges), replace=True)
+    pro_edges = np.random.choice([0, 3], len(i_production_edges), replace=True)
+    rnet.iloc[i_consumption_edges, -1] = con_edges.copy()
+    rnet.iloc[i_production_edges, -1] = pro_edges.copy()
+
+    if MAX_ID_celltypes > 1:    
+        assigned_edges = rnet.iloc[:len(bias_metabolome), -1].values
+        shuffled_edges = np.repeat(assigned_edges, MAX_ID_celltypes-1)
+        shuffled_edges = np.random.permutation(shuffled_edges)
+        
+        rnet.iloc[len(bias_metabolome):, -1] = shuffled_edges.copy()
+    # random_edges = np.random.choice([2, 3, 5], n_edges, replace=True) #Replace original nodes with some random choice of 2, 3 or 5
+    # random_i_unused = np.random.choice(np.arange(len(rnet)), n_unused, replace=False) # Randomly assigned unused status to the same number of metabolites as in the original network
+    # rnet.iloc[:, -1] = random_edges.copy()
+    # rnet.iloc[random_i_unused, -1] = 0
     return rnet
     # all_random_networks.append(rnet)
 
@@ -647,8 +661,9 @@ plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_error, 
 ####### Generate random networks, one for each cell line
 # for i in range(len(all_networks)):
 all_random_networks = []
-for net in all_networks:
-    rnet = generate_random_network(net)
+for i, net in enumerate(all_networks):
+    bias_metabolome = ec_metabolome.iloc[:, i].values - diet.values
+    rnet = generate_random_network(net, bias_metabolome)
     all_random_networks.append(rnet)
 
 
@@ -700,7 +715,7 @@ plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_error, 
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-n_reps = 2
+n_reps = 25
 cl = cell_line_names[0]
 f = 0.5
 
@@ -718,7 +733,8 @@ log_bias_list = [[]]
 in_degree_flag = False
 
 for i in np.arange(n_reps):
-    net_raw = generate_random_network(all_random_networks[0])
+    bias = ec_metabolome.iloc[:, 0].values - diet.values
+    net_raw = generate_random_network(all_random_networks[0], bias)
     x_ori, x, elist, n_added, n_deleted, log_bias = run_network_optimisation(f, cl, cellnum_init, cellnum_final, net_raw, diet, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
     x_ori_list.append(x_ori)
@@ -953,7 +969,7 @@ plt.show()
     
     
 # %%
-net_plot = net_ori.copy()
+net_plot = net_optim.copy()
 df_summary = pd.concat([df_con_links, df_pro_links])
 df_summary.loc[:, 'mean'] = df_summary.iloc[:, 1:n_reps].mean(1)
 
@@ -974,13 +990,13 @@ G_con = nx.from_pandas_edgelist(net_plot[net_plot.loc[:, 'edgeType']==2], source
 right, left = nx.bipartite.sets(G_con)
 
 nx.draw_networkx(G_con, arrows=True, pos=nx.bipartite_layout(G_con, left),
-                 node_size=150, ax=ax[0])
+                 node_size=250, ax=ax[0])
 ax[0].set_title('Uptake links')
 
 G_pro = nx.from_pandas_edgelist(net_plot[net_plot.loc[:, 'edgeType']==3], source='source', target='target', edge_attr='edge_attr', create_using=nx.DiGraph)
 right, left = nx.bipartite.sets(G_pro)
 nx.draw_networkx(G_pro, arrows=True, pos=nx.bipartite_layout(G_pro, right),
-                 node_size=150, ax=ax[1])
+                 node_size=250, ax=ax[1])
 ax[1].set_title('Secretion links')
 
 fig.tight_layout()
