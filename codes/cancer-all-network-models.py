@@ -137,24 +137,21 @@ def Ain_out(f, ct_hyp, diet, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_cel
     out_degree[out_degree==0]=1e6
     b2m = b2m / out_degree
 
-    # ########## Normalize the m2b by proportion of microbial abundance in each individual
+    ########## Normalize the m2b by proportion of microbial abundance in each individual
     ct_freq = ct_hyp/ct_hyp.sum()
-    # ct_hyp_repmat = numpy.matlib.repmat(ct_freq[np.newaxis,:], MAX_ID_metabolites, 1)
-    # m2b = m2b * ct_hyp_repmat # Uptake is proportional to cell type relative abundance
+    ct_hyp_repmat = numpy.matlib.repmat(ct_freq[np.newaxis,:], MAX_ID_metabolites, 1)
+    m2b = m2b * ct_hyp_repmat # Uptake is proportional to cell type relative abundance
     # m2b = np.asarray([i*j for i, j in zip(m2b, diet.to_numpy(dtype=float))]) # Relative amount of nutrient taken up
     if in_degree_flag:
         m2b = m2b/in_degree
     
-    # m2b = np.float32(m2b)
-    # b2m = np.float32(b2m)
-    in_matrix = np.multiply(m2b, ct_freq).sum(0)
-    out_matrix = np.multiply(b2m, f/out_degree)
+    m2b = np.float32(m2b)
+    b2m = np.float32(b2m)
 
     ## Net secretion matrix for both cell types, following uptake and secretion of metabolites 
-    # m2m_total = np.zeros((MAX_ID_metabolites, MAX_ID_celltypes))
-    # m2b_total = m2b.sum(0)
-    # m2m_total = np.array([i*j for i, j in zip(b2m*f*m2b_total, diet.values)])
-    m2m_total = np.multiply(np.dot(out_matrix, in_matrix), diet.values)
+    m2m_total = np.zeros((MAX_ID_metabolites, MAX_ID_celltypes))
+    m2b_total = m2b.sum(0)
+    m2m_total = np.array([i*j for i, j in zip(b2m*f*m2b_total, diet.values)])
 
     return [m2b, b2m, m2m_total]
 
