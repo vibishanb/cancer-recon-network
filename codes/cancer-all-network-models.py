@@ -168,7 +168,7 @@ def calc_metabolome(diet, m2b, m2m_total, numLevels_max, MAX_ID_metabolites):
     (which is considered to be reaching the end of the gut because of the finite gut length and gut motility.),
     and (2) met_leftover_levels: all unusable metabolites from all previous trophic levels/layers. 
     '''
-    met_levels = m2m_total.sum(1)
+    met_levels = m2m_total.copy()
     met_leftover_levels = np.where(m2b.sum(1)==0, diet.to_numpy(), 0)
 
     metabolome_predicted = met_levels + met_leftover_levels
@@ -381,6 +381,43 @@ def plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_err
     if not disp_flag:
         plt.close(figintcpt)
 
+def plot_networks(net, df_summary, which_net, fig_path, figsave_flag):
+    # net_plot = net_optim.copy()
+    net_plot = net.copy()
+    df_summary.loc[:, 'mean'] = df_summary.iloc[:, 1:n_reps].mean(1)
+
+    celltype_labels = ['A', 'B', 'C', 'D', 'E']
+    net_plot.iloc[:, 1] = [celltype_labels[i] for i in net.loc[:, 'celltypes'].values]
+
+    net_plot.columns = np.array(['source', 'target', 'edgeType'])
+    net_plot.loc[:, 'edge_attr'] = df_summary.loc[:, 'mean'].values
+    net_plot = net_plot[net_plot.loc[:, 'edgeType'] != 0]
+    net_temp = net_plot.copy()
+
+    i_flip = np.where(net_temp.loc[:, 'edgeType'] == 3)[0]
+    net_plot.iloc[i_flip, 0] = net_temp.iloc[i_flip, 1]
+    net_plot.iloc[i_flip, 1] = net_temp.iloc[i_flip, 0]
+
+    fig, ax = plt.subplots(1, 2, figsize=(12, 17))
+    G_con = nx.from_pandas_edgelist(net_plot[net_plot.loc[:, 'edgeType']==2], source='source', target='target', edge_attr='edge_attr', create_using=nx.DiGraph)
+    right, left = nx.bipartite.sets(G_con)
+
+    nx.draw_networkx(G_con, arrows=True, pos=nx.bipartite_layout(G_con, left),
+                    node_size=250, ax=ax[0])
+    ax[0].set_title('Uptake links')
+
+    G_pro = nx.from_pandas_edgelist(net_plot[net_plot.loc[:, 'edgeType']==3], source='source', target='target', edge_attr='edge_attr', create_using=nx.DiGraph)
+    right, left = nx.bipartite.sets(G_pro)
+    nx.draw_networkx(G_pro, arrows=True, pos=nx.bipartite_layout(G_pro, right),
+                    node_size=250, ax=ax[1])
+    ax[1].set_title('Secretion links')
+
+    fig.tight_layout()
+
+    if figsave_flag:
+        fig.savefig(fig_path + '/' + which_net +'.png', dpi=300)
+        plt.close(fig)
+
 ####### Error function for GutCP-based algorithm
 def pred_error_addingLinks(x, m2b_ori, b2m_ori, net_ori, f, col_name, diet, in_degree_flag, cellnum_init, cellnum_max, i_nonzero_metabolites, i_nonzero_celltypes):
     '''
@@ -570,8 +607,8 @@ def run_network_optimisation(f, cl, cellnum_init, cellnum_final, net_raw, diet, 
         if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow)*kT)):
             break
 
-    i_added = x[pos_x_list].astype(bool)
-    i_deleted = ~x[pos_x_list].astype(bool)
+    # i_added = x[pos_x_list].astype(bool)
+    # i_deleted = ~x[pos_x_list].astype(bool)
     # i_used_mets, error_final, met_bias_final, log_met_bias_final = fun(x)
 
     # links_added, links_deleted = np.zeros(max_links*2), np.zeros(max_links*2)
@@ -718,7 +755,7 @@ plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_error, 
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-n_reps = 25
+n_reps = 50
 cl = cell_line_names[0]
 f = 0.5
 
@@ -798,12 +835,13 @@ df_pro_plot = df_pro_links.melt(id_vars='metabolite', var_name = 'linkType', val
 
 # %%
 ##### Visualising output
-# net_state = 'optim-net/'
-# fig_path = '../figures/'+str(k)+'-celltypes/'+net_state+'/'+cl
-# try:
-#     os.makedirs(fig_path)
-# except:
-#     pass
+net_state = 'optim-net/'
+figsave_flag = True
+fig_path = '../figures/'+str(k)+'-celltypes/'+net_state+cl
+try:
+    os.makedirs(fig_path)
+except:
+    pass
 
 ##### I'm calling this the general summary, whatever that means
 f, ax = plt.subplots(2, 2, figsize=(7, 6))
@@ -850,32 +888,38 @@ ax[1, 1].set_title("%d replicate runs" % n_reps)
 
 f.suptitle('Network optimisation for %s' % cl)
 f.tight_layout()
-# f.savefig(fig_path+'/general-summary.png', dpi=300)
+if figsave_flag:
+    f.savefig(fig_path+'/no-penalties-all-replicates-summary.png', dpi=300)
+    plt.close(f)
 
-##### A visualisation of what is being added and removed on average, over 100 replicate runs
-met_labels = all_networks[0].loc[:, 'Metabolite'].values
-max_val = np.concatenate([df_con_plot['linkNumber'].values, df_pro_plot['linkNumber'].values]).max()
+# ##### A visualisation of what is being added and removed on average, over 100 replicate runs
+# met_labels = all_networks[0].loc[:, 'Metabolite'].values
+# max_val = np.concatenate([df_con_plot['linkNumber'].values, df_pro_plot['linkNumber'].values]).max()
 
-f, ax = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(16, 18))
-sns.heatmap(data=df_con_links.iloc[:, -2:], cmap='crest', ax=ax[0],
-            yticklabels=met_labels,
-            vmin=0, vmax=max_val, cbar=False)
-ax[0].set_title('Consumption')
-ax[0].set_ylabel('')
-
-# sns.barplot(data=df_con_plot, x='metabolite', y='linkNumber', hue='linkType', palette='crest', ax=ax[0])
-# ax[0].set_title('Consumption links changed')
+# f, ax = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(16, 18))
+# sns.heatmap(data=df_con_links.iloc[:, -2:], cmap='crest', ax=ax[0],
+#             yticklabels=met_labels,
+#             vmin=0, vmax=max_val, cbar=False)
+# ax[0].set_title('Consumption')
 # ax[0].set_ylabel('')
 
-sns.heatmap(data=df_pro_links.iloc[:, -2:], cmap='crest', ax=ax[1],
-            yticklabels=met_labels,
-            vmin=0, vmax=max_val)
-ax[1].set_title('Production')
-ax[1].set_ylabel('')
+# # sns.barplot(data=df_con_plot, x='metabolite', y='linkNumber', hue='linkType', palette='crest', ax=ax[0])
+# # ax[0].set_title('Consumption links changed')
+# # ax[0].set_ylabel('')
 
-# f.supylabel('Changes per %d replicates' % n_reps)
-f.supxlabel('Changes per %d replicates' % n_reps)
-f.tight_layout()
+# ### Heatmap of all changes
+# sns.heatmap(data=df_pro_links.iloc[:, -2:], cmap='crest', ax=ax[1],
+#             yticklabels=met_labels,
+#             vmin=0, vmax=max_val)
+# ax[1].set_title('Production')
+# ax[1].set_ylabel('')
+
+# # f.supylabel('Changes per %d replicates' % n_reps)
+# f.supxlabel('Changes per %d replicates' % n_reps)
+# f.tight_layout()
+
+
+
 
 # # Extract bar coordinates for error bar placement
 # x_coords = [p.get_x() + 0.5 * p.get_width() for p in ax.patches]
@@ -888,9 +932,10 @@ f.tight_layout()
 
 # %%
 ##### Check out the best performing network
-pred_error_change = np.array([list[0]-list[-1] for list in log_bias_list])
+# pred_error_change = np.array([list[0]-list[-1] for list in log_bias_list])
+final_pred_error = np.array([arr[-1] for arr in log_bias_list])
 
-i_best_net = np.where(pred_error_change == pred_error_change.max())[0]
+i_best_net = np.where(final_pred_error == final_pred_error.min())[0]#np.where(pred_error_change == pred_error_change.max())[0]
 x_ori = x_ori_list[i_best_net].flatten()
 x_optim = x_optim_list[i_best_net].flatten()
 
@@ -954,54 +999,32 @@ print('------------------------------------------------------------------------'
 fig, ax = plt.subplots(1, 2, sharey=True, figsize=(7, 4))
 ax[0].loglog(metabolome_pred_old, metabolome_measured_old, 'ko')
 # ax[0].scatter(np.log10(metabolome_pred_old+1e-7), np.log10(metabolome_measured_old+1e-7), c='k', s=9)
-ax[0].plot([-3, 3], [-3, 3],'k-')
+ax[0].axline((-2, -2), (3, 3), c='k')
 ax[0].set_title('Old network')
 # ax[0].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
 ax[0].set_ylabel(r'$log_{10}\ Empirical\ data$')
 
 ax[1].loglog(metabolome_pred, metabolome_measured, 'ko')
 # ax[1].scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=9)
-ax[1].plot([-3, 3], [-3, 3], 'k-')
+ax[1].axline((-2, -2), (3, 3), c='k')
 ax[1].set_title('New network')
 # ax[1].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
 # ax[1].set_ylabel(r'$log_{10}\ Empirical\ data$')
 fig.supxlabel(r'$log_{10}\ Predicted\ metabolome$')
 plt.tight_layout()
-plt.show()
+
+if figsave_flag:
+    fig.savefig(fig_path+'/no-penalties-prediction-comparison.png', dpi=300)
+    plt.close(fig)
+else:
+    plt.show()
 # plt.scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=4)
     
     
 # %%
-net_plot = net_optim.copy()
 df_summary = pd.concat([df_con_links, df_pro_links])
-df_summary.loc[:, 'mean'] = df_summary.iloc[:, 1:n_reps].mean(1)
 
-celltype_labels = ['A', 'B', 'C', 'D', 'E']
-net_plot.iloc[:, 1] = [celltype_labels[i] for i in net_ori.loc[:, 'celltypes'].values]
-
-net_plot.columns = np.array(['source', 'target', 'edgeType'])
-net_plot.loc[:, 'edge_attr'] = df_summary.loc[:, 'mean'].values
-net_plot = net_plot[net_plot.loc[:, 'edgeType'] != 0]
-net_temp = net_plot.copy()
-
-i_flip = np.where(net_temp.loc[:, 'edgeType'] == 3)[0]
-net_plot.iloc[i_flip, 0] = net_temp.iloc[i_flip, 1]
-net_plot.iloc[i_flip, 1] = net_temp.iloc[i_flip, 0]
-
-fig, ax = plt.subplots(1, 2, figsize=(12, 17))
-G_con = nx.from_pandas_edgelist(net_plot[net_plot.loc[:, 'edgeType']==2], source='source', target='target', edge_attr='edge_attr', create_using=nx.DiGraph)
-right, left = nx.bipartite.sets(G_con)
-
-nx.draw_networkx(G_con, arrows=True, pos=nx.bipartite_layout(G_con, left),
-                 node_size=250, ax=ax[0])
-ax[0].set_title('Uptake links')
-
-G_pro = nx.from_pandas_edgelist(net_plot[net_plot.loc[:, 'edgeType']==3], source='source', target='target', edge_attr='edge_attr', create_using=nx.DiGraph)
-right, left = nx.bipartite.sets(G_pro)
-nx.draw_networkx(G_pro, arrows=True, pos=nx.bipartite_layout(G_pro, right),
-                 node_size=250, ax=ax[1])
-ax[1].set_title('Secretion links')
-
-fig.tight_layout()
+plot_networks(net_ori, df_summary, 'original-net', fig_path, figsave_flag)
+plot_networks(net_optim, df_summary, 'optimised-net', fig_path, figsave_flag)
 
 # %%

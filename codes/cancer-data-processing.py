@@ -65,39 +65,29 @@ met_test_mean = met_test_mean.iloc[:, ~np.isin(met_test_mean.columns, ['Baseline
 baseline_mass = met_baseline.mul(mw, axis=0).sum(axis=0).to_numpy()/10**6
 test_mass = met_test_mean.mul(mw, axis=0).sum(axis=0).to_numpy()/10**6
 
-SMALL_SIZE = 12
-MEDIUM_SIZE = 15
-BIGGER_SIZE = 15
+# SMALL_SIZE = 12
+# MEDIUM_SIZE = 15
+# BIGGER_SIZE = 15
 
-plt.rc('font', size=SMALL_SIZE, family='sans-serif', serif='Arial')          # controls default text sizes
-plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
-plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
-plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
-plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
-plt.rc('text')
+# plt.rc('font', size=SMALL_SIZE, family='sans-serif', serif='Arial')          # controls default text sizes
+# plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+# plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+# plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+# plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+# plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+# plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+# plt.rc('text')
 
-from matplotlib.ticker import MaxNLocator
-my_locator = MaxNLocator(6)
+# from matplotlib.ticker import MaxNLocator
+# my_locator = MaxNLocator(6)
 
-color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+# color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
 
-def figure_size_setting(WIDTH):
-    #WIDTH = 700.0  # the number latex spits out
-    FACTOR = 0.8  # the fraction of the width you'd like the figure to occupy
-    fig_width_pt  = WIDTH * FACTOR
-    inches_per_pt = 1.0 / 72.27
-    golden_ratio  = (np.sqrt(5) - 1.0) / 2.0  # because it looks good
-    fig_width_in  = fig_width_pt * inches_per_pt  # figure width in inches
-    fig_height_in = fig_width_in * golden_ratio   # figure height in inches
-    fig_dims    = [fig_width_in, fig_height_in] # fig dims as a list
-    return fig_dims
-f, ax = plt.subplots()
-sns.scatterplot(test_mass, ax=ax)
-ax.hlines(y = baseline_mass, xmin=0, xmax=60, linestyles='dashed', colors='r', label='Baseline')
-ax.hlines(y = baseline_mass.mean(), xmin=0, xmax=60, linestyles='solid', colors='k', lw=2, label='Mean baseline')
-plt.legend(loc='lower right')
+# f, ax = plt.subplots()
+# sns.scatterplot(test_mass, ax=ax)
+# ax.hlines(y = baseline_mass, xmin=0, xmax=60, linestyles='dashed', colors='r', label='Baseline')
+# ax.hlines(y = baseline_mass.mean(), xmin=0, xmax=60, linestyles='solid', colors='k', lw=2, label='Mean baseline')
+# plt.legend(loc='lower right')
 
 
 # %%
@@ -149,27 +139,27 @@ for i in range(n_lines):
     curr_net.iloc[:, -1] = np.where(core_mean.iloc[i, 1:] == 0, 0, 5)
     all_networks.append(curr_net)
 
-# ## Only un-comment if using more than one cell type
-# k = 3 # Final number of cell types assumed for the current iteration of the model
-# ## Update celltype_IDs and all recon networks for the final number of cell types assumed
-# celltype_all = pd.read_csv('../input-data/prior-celltype-abundance.txt', sep=',')
-# celltype_all = celltype_all.iloc[:k, ] # Selecting number of cell types
-# celltype_all.head()
-# ### Randomly sampled relative abundances of the cell types
-# rand = np.random.uniform(0, 1, k)
-# celltype_all['Mean'] = rand/rand.sum()
-# celltype_ID = celltype_all['celltype_id']
-# #print((celltype_ID!=0).sum())
-# celltype = celltype_all[celltype_ID!=0].loc[:,'Mean']
-# celltype_ID = celltype_ID[celltype_ID!=0]
+## Only un-comment if using more than one cell type
+k = 4 # Final number of cell types assumed for the current iteration of the model
+## Update celltype_IDs and all recon networks for the final number of cell types assumed
+celltype_all = pd.read_csv('../input-data/prior-celltype-abundance.txt', sep=',')
+celltype_all = celltype_all.iloc[:k, ] # Selecting number of cell types
+celltype_all.head()
+### Randomly sampled relative abundances of the cell types
+rand = np.random.uniform(0, 1, k)
+celltype_all['Mean'] = rand/rand.sum()
+celltype_ID = celltype_all['celltype_id']
+#print((celltype_ID!=0).sum())
+celltype = celltype_all[celltype_ID!=0].loc[:,'Mean']
+celltype_ID = celltype_ID[celltype_ID!=0]
 
-# for i, net in enumerate(all_networks):
-#     valid_net = net.copy()
-#     net_temp = net.copy()
-#     for c in np.arange(2, k+1):
-#         net_temp.loc[:, 'celltypes_ID'] = c # Second cell type with the same network
-#         valid_net = pd.concat([valid_net, net_temp]) # Network with selected number of cell types
-#     all_networks[i] = valid_net.copy()
+for i, net in enumerate(all_networks):
+    valid_net = net.copy()
+    net_temp = net.copy()
+    for c in np.arange(2, k+1):
+        net_temp.loc[:, 'celltypes_ID'] = c # Second cell type with the same network
+        valid_net = pd.concat([valid_net, net_temp]) # Network with selected number of cell types
+    all_networks[i] = valid_net.copy()
 
 
 # %%
