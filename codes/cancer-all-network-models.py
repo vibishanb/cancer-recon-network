@@ -109,54 +109,62 @@ def get_network(net):
 
     return net_final, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites
 
-def Ain_out(f, ct_hyp, diet, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
+def calculate_metabolome_from_net(f, ct_hyp, diet, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
-    Ain_out is a function used to create sparse matrices made of metabolites and celltypes 
+    This is a function used to create sparse matrices made of metabolites and celltypes 
     where metabolite consumption and production is considered. The matrices created are "m2b" and "b2m":
-    (1) m2b is a matrix determines the nutrient splitting among celltypes, and
-    (2) b2m is a matrix determines the byproducts generation.
-    Both matrices have rows (columns?) representing bacterial species and columns (rows?) representing metabolites.
+    (1) m2b is a matrix determines nutrient uptake by celltypes, and
+    (2) b2m is a matrix determines the nutrient secretion.
+    Both matrices have rows representing cancer celltypes and columns representing metabolites.
     Two matrices are created based on (1) the metabolite consumption and production network which is 
-    encode in "net" as a dataframe, and (2) the hypothesised relative cell type frequencies "ct_hyp".
+    encode in "net" as a dataframe, and (2) the hypothesised relative cell type frequencies "ct_hyp". Those metabolites that are not taken up by any celltype are inherited as is from the diet supplied, while uptake of metabolites is assumed to be complete i.e., even if only a single celltype can take up a metabolite, it consumes all of it from the environment.
     '''
+    #### A^in
     valid_index = np.where((net['edgeType']==2) | (net['edgeType']==5))[0]
-    row = net['metabolites'].iloc[valid_index]
-    col = net['celltypes'].iloc[valid_index]
+    col = net['metabolites'].iloc[valid_index]
+    row = net['celltypes'].iloc[valid_index]
     data = np.ones((len(valid_index),))
-    m2b = csr_matrix((data,(row,col)), shape=(MAX_ID_metabolites, MAX_ID_celltypes)).toarray()#.todense()
+    m2b = csr_matrix((data,(row,col)), shape=(MAX_ID_celltypes, MAX_ID_metabolites)).toarray()#.todense()
     in_degree = m2b.sum(0)
 
+    #### A^out
     valid_index = np.where((net['edgeType']==3) | (net['edgeType']==5))[0]
-    row = net['metabolites'].iloc[valid_index]
-    col = net['celltypes'].iloc[valid_index]
+    col = net['metabolites'].iloc[valid_index]
+    row = net['celltypes'].iloc[valid_index]
     data = np.ones((len(valid_index),))
-    b2m = csr_matrix( (data,(row,col)), shape=(MAX_ID_metabolites, MAX_ID_celltypes)).toarray()#.todense()
+    b2m = csr_matrix( (data,(row,col)), shape=(MAX_ID_celltypes, MAX_ID_metabolites)).toarray()#.todense()
 
-    ########## Normalize the b2m by out_degree
-    out_degree = b2m.sum(0).copy()
-    out_degree[out_degree==0]=1e6
-    b2m = b2m / out_degree
-
-    # ########## Normalize the m2b by proportion of microbial abundance in each individual
-    ct_freq = ct_hyp/ct_hyp.sum()
-    # ct_hyp_repmat = numpy.matlib.repmat(ct_freq[np.newaxis,:], MAX_ID_metabolites, 1)
-    # m2b = m2b * ct_hyp_repmat # Uptake is proportional to cell type relative abundance
-    # m2b = np.asarray([i*j for i, j in zip(m2b, diet.to_numpy(dtype=float))]) # Relative amount of nutrient taken up
     if in_degree_flag:
         m2b = m2b/in_degree
     
-    # m2b = np.float32(m2b)
-    # b2m = np.float32(b2m)
-    in_matrix = np.multiply(m2b, ct_freq).sum(0)
-    out_matrix = np.multiply(b2m, f/out_degree)
+    ##### Intake matrix calculation
+    cellnum = np.matlib.repmat(ct_hyp[:, np.newaxis], 1, MAX_ID_metabolites) 
+    con_matrix = m2b*cellnum
+    ### Normalising consumption of metabolites by the total number of consumers of each metabolite
+    total_cellnum = con_matrix.sum(0)
+    tau = np.zeros(len(total_cellnum))
+    i_nonzero = np.where(total_cellnum > 0)[0]
+    tau[i_nonzero] += 1/total_cellnum[i_nonzero]
+    con_norm = con_matrix * tau
+    intake_vector = np.dot(con_norm, diet.values)
 
-    ## Net secretion matrix for both cell types, following uptake and secretion of metabolites 
-    # m2m_total = np.zeros((MAX_ID_metabolites, MAX_ID_celltypes))
-    # m2b_total = m2b.sum(0)
-    # m2m_total = np.array([i*j for i, j in zip(b2m*f*m2b_total, diet.values)])
-    m2m_total = np.multiply(np.dot(out_matrix, in_matrix), diet.values)
+    ##### Output matrix
+    out_degree = b2m.sum(1)
+    inv_out_degree = np.zeros(len(out_degree))
+    i_nonzero = np.where(out_degree > 0)[0]
+    inv_out_degree[i_nonzero] += f/out_degree[i_nonzero] # Secretion by each celltype is split equally between all the metabolites it secretes
+    out_mult = np.matlib.repmat(inv_out_degree[:, np.newaxis], 1, MAX_ID_metabolites)
+    output_matrix = b2m * out_mult
 
-    return [m2b, b2m, m2m_total]
+    ###### Final metabolome-secreted + unused
+    secreted_metabolome = np.dot(output_matrix.T, intake_vector)
+    i_unused = np.where(in_degree == 0)[0] # Metabolites not consumed by any celltype
+    metabolome_unused = np.zeros(len(diet.values))
+    metabolome_unused[i_unused] += diet.values[i_unused]
+
+    metabolome_pred = secreted_metabolome + metabolome_unused
+
+    return [m2b, b2m, metabolome_pred]
 
 def calc_metabolome(diet, m2b, m2m_total, numLevels_max, MAX_ID_metabolites):
     '''
