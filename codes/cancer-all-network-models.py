@@ -740,7 +740,19 @@ if __name__ == '__main__':
     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
     pool = Pool(10)
     kt_errors = pool.map(run_network_optimisation, iter_params_list_kt) #iterate over combinations
+    pool.close()
+    pool.join()
+
+if __name__ == '__main__':
+    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+    pool = Pool(10)
     penalty_errors = pool.map(run_network_optimisation, iter_params_list_pn) #iterate over combinations
+    pool.close()
+    pool.join()
+
+if __name__ == '__main__':
+    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+    pool = Pool(10)
     reward_errors = pool.map(run_network_optimisation, iter_params_list_rw) #iterate over combinations
     pool.close()
     pool.join()
