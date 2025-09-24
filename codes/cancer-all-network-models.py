@@ -788,13 +788,55 @@ try:
 except:
     pass
 
-pickle_out = open(pickle_path + "sensitivity-kt-penalty-reward.pickle","wb")
-#pickle.dump([net, i_selfish, i_intake, names], pickle_out)
+pickle_out = open(pickle_path + "sensitivity-kt-penalty-reward.pickle", "wb")
 pickle.dump([kt_errors, penalty_errors, reward_errors], pickle_out, protocol=2)
 pickle_out.close()
 
-pickle_out = open(pickle_path + "by-product-fraction.pickle","wb")
-#pickle.dump([net, i_selfish, i_intake, names], pickle_out)
+pickle_out = open(pickle_path + "by-product-fraction.pickle", "wb")
 pickle.dump([f_errors], pickle_out, protocol=2)
 pickle_out.close()
+
+# %%
+pickle_path = '../raw-output/'+str(2)+'-celltypes/'+net_state
+kt_df2, pn_df2, rw_df2 = pd.read_pickle(pickle_path + 'sensitivity-kt-penalty-reward.pickle')
+f_df2 = pd.read_pickle(pickle_path + "by-product-fraction.pickle")
+
+pickle_path = '../raw-output/'+str(3)+'-celltypes/'+net_state
+kt_df3, pn_df3, rw_df3 = pd.read_pickle(pickle_path + 'sensitivity-kt-penalty-reward.pickle')
+f_df3 = pd.read_pickle(pickle_path + "by-product-fraction.pickle")
+
+pickle_path = '../raw-output/'+str(4)+'-celltypes/'+net_state
+kt_df4, pn_df4, rw_df4 = pd.read_pickle(pickle_path + 'sensitivity-kt-penalty-reward.pickle')
+f_df4 = pd.read_pickle(pickle_path + "by-product-fraction.pickle")
+
+n_reps = 100
+kT_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
+penalty_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
+reward_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
+
+ct_num = np.array([np.repeat(2, len(kt_df2)), np.repeat(3, len(kt_df3)), np.repeat(4, len(kt_df4))]).ravel()
+
+kt_df_all = pd.DataFrame({'kT': np.concatenate([kT_arr, kT_arr, kT_arr]),
+                'CTNum': ct_num,
+                'MeanError': np.concatenate([kt_df2, kt_df3, kt_df3])})
+sns.lineplot(data=kt_df_all, x='kT', hue='CTNum', y='MeanError', palette='crest')
+
+
+pn_df_all = pd.DataFrame({'Penalty': np.concatenate([penalty_arr, penalty_arr, penalty_arr]),
+                'CTNum': ct_num,
+                'MeanError': np.concatenate([pn_df2, pn_df3, pn_df4])})
+sns.lineplot(data=pn_df_all, x='Penalty', hue='CTNum', y='MeanError', palette='crest')
+
+rw_df_all = pd.DataFrame({'Reward': np.concatenate([reward_arr, reward_arr, reward_arr]),
+                'CTNum': ct_num,
+                'MeanError': np.concatenate([rw_df2, rw_df3, rw_df3])})
+sns.lineplot(data=rw_df_all, x='Reward', hue='CTNum', y='MeanError', palette='crest')
+
+# %%
+heatmap_df = pd.DataFrame(np.array([f_df4[0], f_df3[0], f_df2[0]]),
+                          columns=f_arr, index=[4, 3, 2])
+sns.heatmap(data=heatmap_df, cmap='crest',
+            cbar_kws={'label': 'RMSE'})
+plt.xlabel(r'Byproduct fraction, $f$')
+plt.ylabel(r'Celltype number')
 # %%
