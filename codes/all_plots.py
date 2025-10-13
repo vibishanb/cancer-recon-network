@@ -105,7 +105,7 @@ def plot_summary_stats(net_state, fig_name, k, f_arr, ec_corr, ct_full, mean_err
     if not disp_flag:
         plt.close(figintcpt)
 
-def plot_networks(net, df_summary, which_net, fig_path, figsave_flag):
+def plot_networks(net, df_summary, which_net, n_reps, fig_path, figsave_flag):
     # net_plot = net_optim.copy()
     net_plot = net.copy()
     df_summary.loc[:, 'mean'] = df_summary.iloc[:, 1:n_reps].mean(1)

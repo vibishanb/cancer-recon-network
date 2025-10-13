@@ -166,12 +166,12 @@ for i, net in enumerate(all_networks):
 ########### pickle all processed data which are useful for simulations
 import pickle
 
-pickle_out = open("cancer_network.pickle","wb")
+pickle_out = open(str(k)+"-cells-cancer_network.pickle","wb")
 #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
 pickle.dump([all_networks, i_intake, names], pickle_out, protocol=2)
 pickle_out.close()
 
-pickle_out = open("data.pickle","wb")
+pickle_out = open(str(k)+"-cells-data.pickle","wb")
 pickle.dump([celltype_ID, celltype, ec_metabolome_ID, met_test_mean, met_baseline, core_mean], pickle_out, protocol=2)
 pickle_out.close()
 
