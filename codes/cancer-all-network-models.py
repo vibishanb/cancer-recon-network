@@ -47,14 +47,14 @@ color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
 ######## Import the pickled file containing all processed data which are useful for simulations (the processing is
 ########### done in "cancer-data-processing.py")
 # pickle_in = open("cancer_network.pickle","rb")
-home_dir = '/Users/vibishanb/cancer-recon-network/codes/'
-all_networks, i_intake, names = pd.read_pickle(home_dir + '1-cells-cancer_network.pickle')
+home_dir = os.getcwd()
+all_networks, i_intake, names = pd.read_pickle(home_dir + '/1-cells-cancer_network.pickle')
 # i_selfish = 0
 
 # pickle_in = open("data.pickle","rb")
-celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '1-cells-data.pickle')
+celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/1-cells-data.pickle')
 
-slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + 'cancer_power_law_stats.pickle')
+slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
 nets_temp = all_networks.copy()
 
 ### Filtering those networks for cell lines with power law slopes
@@ -357,23 +357,27 @@ def run_network_optimisation(all_params):
 
     # Network optimisation begins here
     kT = all_params[9]
-    Twindow = 1000
+    Twindow = 500
     numStepsNotAdded = 0
     numAdditions = 0
     numDeletions = 0
     error_window = []
     for i in range(10000):
+
+        error_window.append(error_before)
         if np.random.uniform(0,1,1)[0] <= 0.5: # Each step chooses randomly between adding a new link or removing an existing link
             i_x = np.random.choice(np.where(x==0)[0], 1, p=prior_prob[x==0]/prior_prob[x==0].sum())[0] # New link is chosen based on the prior probability-smaller bias in prediction leads to smaller prior prob
             x[i_x] = 1
-        else:
+        elif (x==1).sum() > 0:
             i_x = np.random.choice(np.where(x==1)[0], 1, p=prior_prob[x==1]/prior_prob[x==1].sum())[0] # New link is chosen based on the prior probability-smaller bias in prediction leads to smaller prior prob
             x[i_x] = 0
+        else:
+            continue
 
         error_after, metabolome_pred_after, metabolome_meas_after, bias_metabolome, log_bias = pred_error_addingLinks(x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
         prior_prob = calculate_priors(bias_metabolome)
 
-        if np.random.uniform(0,1,1)[0] < np.exp((-error_after)/kT): # If the reduction in error is large enough, the proposed link addition/removal is accepted
+        if np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT): # If the reduction in error is large enough, the proposed link addition/removal is accepted
             error_before = error_after
             if x[i_x] == 1:
                 # print('Addition accepted, error is ', error_before)
@@ -400,7 +404,6 @@ def run_network_optimisation(all_params):
         else:  ## not accepted   
             x[i_x] = x_ori[i_x] # Maintain the original state
             numStepsNotAdded += 1
-        error_window.append(error_before)
         if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow)*kT)):
             break
     n_pred_after = len(np.where(metabolome_pred_list[-1] > 0)[0])
@@ -497,249 +500,249 @@ for i, net in enumerate(all_networks):
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-n_reps = 10
-cl = cell_line_names[0]
-f = 0.5
+# n_reps = 5
+# cl = cell_line_names[0]
+# f = 0.5
 
-cellnum_init = cellnum_init_all[0]
-cellnum_final = cellnum_final_all[0]
-bias = np.log10(ec_metabolome.iloc[:, 0].values + 1e-6) - np.log10(diet.values + 1e-6)
-net_raw = generate_random_network(all_random_networks[0], bias)
+# cellnum_init = cellnum_init_all[0]
+# cellnum_final = cellnum_final_all[0]
+# bias = np.log10(ec_metabolome.iloc[:, 0].values + 1e-6) - np.log10(diet.values + 1e-6)
+# net_raw = generate_random_network(all_random_networks[0], bias)
 
-all_params = np.array([f, cl,
-              cellnum_init, cellnum_final,
-              net_raw, diet, in_degree_flag,
-              MAX_ID_metabolites, MAX_ID_celltypes,
-              1., 0., 0.], dtype=object)
+# all_params = np.array([f, cl,
+#               cellnum_init, cellnum_final,
+#               net_raw, diet, in_degree_flag,
+#               MAX_ID_metabolites, MAX_ID_celltypes,
+#               0.02, 0., 0.], dtype=object)
 
-x_optim_list = [[]]
-x_ori_list = [[]]
-error_list_all_reps = [[]]
-log_bias_list = [[]]
-metabolome_pred_before_list = [[]]
-metabolome_meas_before_list = [[]]
-metabolome_pred_after_list = [[]]
-metabolome_meas_after_list = [[]]
+# x_optim_list = [[]]
+# x_ori_list = [[]]
+# error_list_all_reps = [[]]
+# log_bias_list = [[]]
+# metabolome_pred_before_list = [[]]
+# metabolome_meas_before_list = [[]]
+# metabolome_pred_after_list = [[]]
+# metabolome_meas_after_list = [[]]
 
-in_degree_flag = False
+# in_degree_flag = False
 
-for i in np.arange(n_reps):
-    kT, penalty, reward, f, n_pred_before, n_pred_after, x_ori, x, elist, met_pred_before, met_meas_before, met_pred_after, met_meas_after, log_bias = run_network_optimisation(all_params)
+# for i in np.arange(n_reps):
+#     kT, penalty, reward, f, n_pred_before, n_pred_after, x_ori, x, elist, met_pred_before, met_meas_before, met_pred_after, met_meas_after, log_bias = run_network_optimisation(all_params)
 
-    x_ori_list.append(x_ori)
-    x_optim_list.append(x)
-    error_list_all_reps.append(elist)
-    log_bias_list.append(log_bias)
-    metabolome_pred_before_list.append(met_pred_before)
-    metabolome_pred_after_list.append(met_pred_after)
-    metabolome_meas_before_list.append(met_meas_before)
-    metabolome_meas_after_list.append(met_meas_after)
+#     x_ori_list.append(x_ori)
+#     x_optim_list.append(x)
+#     error_list_all_reps.append(elist)
+#     log_bias_list.append(log_bias)
+#     metabolome_pred_before_list.append(met_pred_before)
+#     metabolome_pred_after_list.append(met_pred_after)
+#     metabolome_meas_before_list.append(met_meas_before)
+#     metabolome_meas_after_list.append(met_meas_after)
 
-    print('Round', i+1, ', initial error is', elist[0])
-    print('Network optmisation ended with final error', elist[-1])
-    print(n_pred_before, 'metabolites predicted initially and ', n_pred_after, 'after optimisation')
-    print('------------------')
+#     print('Round', i+1, ', initial error is', elist[0])
+#     print('Network optmisation ended with final error', elist[-1])
+#     print(n_pred_before, 'metabolites predicted initially and ', n_pred_after, 'after optimisation')
+#     print('------------------')
 
-x_ori_list = np.array(x_ori_list[1:])
-x_optim_list = np.array(x_optim_list[1:])
-error_plot_list = np.array(error_list_all_reps[1:], dtype=object)
-log_bias_list = np.array(log_bias_list[1:], dtype=object)
-metabolome_pred_before_list = np.array(metabolome_pred_before_list[1:], dtype=object)
-metabolome_pred_after_list = np.array(metabolome_pred_after_list[1:], dtype=object)
-metabolome_meas_before_list = np.array(metabolome_meas_before_list[1:], dtype=object)
-metabolome_meas_after_list = np.array(metabolome_meas_after_list[1:], dtype=object)
+# x_ori_list = np.array(x_ori_list[1:])
+# x_optim_list = np.array(x_optim_list[1:])
+# error_plot_list = np.array(error_list_all_reps[1:], dtype=object)
+# log_bias_list = np.array(log_bias_list[1:], dtype=object)
+# metabolome_pred_before_list = np.array(metabolome_pred_before_list[1:], dtype=object)
+# metabolome_pred_after_list = np.array(metabolome_pred_after_list[1:], dtype=object)
+# metabolome_meas_before_list = np.array(metabolome_meas_before_list[1:], dtype=object)
+# metabolome_meas_after_list = np.array(metabolome_meas_after_list[1:], dtype=object)
 
-max_links = MAX_ID_metabolites*MAX_ID_celltypes
-con_links_all = np.array([arr[:max_links] for arr in x_optim_list - x_ori_list])
-pro_links_all = np.array([arr[max_links:] for arr in x_optim_list - x_ori_list])
-df_con_links = pd.DataFrame(con_links_all.T)
-df_pro_links = pd.DataFrame(pro_links_all.T)
+# max_links = MAX_ID_metabolites*MAX_ID_celltypes
+# con_links_all = np.array([arr[:max_links] for arr in x_optim_list - x_ori_list])
+# pro_links_all = np.array([arr[max_links:] for arr in x_optim_list - x_ori_list])
+# df_con_links = pd.DataFrame(con_links_all.T)
+# df_pro_links = pd.DataFrame(pro_links_all.T)
 
-df_con_links.loc[:, 'added'] = np.array([np.where(i==1)[0].shape[0] for i in con_links_all.T])
-df_con_links.loc[:, 'removed'] = np.array([np.where(i==-1)[0].shape[0] for i in con_links_all.T])
-df_pro_links.loc[:, 'added'] = np.array([np.where(i==1)[0].shape[0] for i in pro_links_all.T])
-df_pro_links.loc[:, 'removed'] = np.array([np.where(i==-1)[0].shape[0] for i in pro_links_all.T])
-df_con_links.reset_index(names='metabolite', inplace=True)
-df_pro_links.reset_index(names='metabolite', inplace=True)
+# df_con_links.loc[:, 'added'] = np.array([np.where(i==1)[0].shape[0] for i in con_links_all.T])
+# df_con_links.loc[:, 'removed'] = np.array([np.where(i==-1)[0].shape[0] for i in con_links_all.T])
+# df_pro_links.loc[:, 'added'] = np.array([np.where(i==1)[0].shape[0] for i in pro_links_all.T])
+# df_pro_links.loc[:, 'removed'] = np.array([np.where(i==-1)[0].shape[0] for i in pro_links_all.T])
+# df_con_links.reset_index(names='metabolite', inplace=True)
+# df_pro_links.reset_index(names='metabolite', inplace=True)
 
-df_con_plot = df_con_links.melt(id_vars='metabolite', var_name = 'linkType', value_vars=['added', 'removed'], value_name='linkNumber', ignore_index=False)
-df_pro_plot = df_pro_links.melt(id_vars='metabolite', var_name = 'linkType', value_vars=['added', 'removed'], value_name='linkNumber', ignore_index=False)
+# df_con_plot = df_con_links.melt(id_vars='metabolite', var_name = 'linkType', value_vars=['added', 'removed'], value_name='linkNumber', ignore_index=False)
+# df_pro_plot = df_pro_links.melt(id_vars='metabolite', var_name = 'linkType', value_vars=['added', 'removed'], value_name='linkNumber', ignore_index=False)
 
 
 # %%
 ##### Visualising output
-net_state = 'optim-net/'
-figsave_flag = False
-fig_path = '../figures/'+str(k)+'-celltypes/'+net_state+cl
-try:
-    os.makedirs(fig_path)
-except:
-    pass
+# net_state = 'optim-net/'
+# figsave_flag = False
+# fig_path = '../figures/'+str(k)+'-celltypes/'+net_state+cl
+# try:
+#     os.makedirs(fig_path)
+# except:
+#     pass
 
-##### I'm calling this the general summary, whatever that means
-f, ax = plt.subplots(2, 2, figsize=(7, 6))
+# ##### I'm calling this the general summary, whatever that means
+# f, ax = plt.subplots(1, 2, figsize=(8, 5))
 
-#### A quick glance of where sims have begun and ended
-for i in range(n_reps):
-    sns.lineplot(error_plot_list[i], ax=ax[0, 0])
-ax[0, 0].set_xlabel("Add/remove steps")
-ax[0, 0].set_ylabel("Prediction error")
-ax[0, 0].set_title("%d replicate runs" % n_reps)
+# #### A quick glance of where sims have begun and ended
+# for i in range(n_reps):
+#     sns.lineplot(log_bias_list[i], ax=ax[0])
+# ax[0].set_xlabel("Add/remove steps")
+# ax[0].set_ylabel("RMSE")
+# ax[0].set_title("%d replicate runs" % n_reps)
 
-#### How many steps of add/remove on average
-sim_length = np.zeros(n_reps)
-for i in range(n_reps):
-    sim_length[i] = len(error_plot_list[i])
-sns.histplot(sim_length, fill=True, element='step', 
-             stat='density', alpha=0.25, bins=10, kde=True, ax=ax[0, 1])
-ax[0, 1].set_xlabel('# steps')
-ax[0, 1].set_title("Step number distribution")
+# #### How many steps of add/remove on average
+# sim_length = np.zeros(n_reps)
+# for i in range(n_reps):
+#     sim_length[i] = len(error_plot_list[i])
+# sns.histplot(sim_length, fill=True, element='step', 
+#              stat='density', alpha=0.25, bins=10, kde=True, ax=ax[1])
+# ax[1].set_xlabel('# steps')
+# ax[1].set_title("Step number distribution")
 
-#### Does it matter what the initial error is
-initial_error = np.array([arr[0] for arr in error_plot_list])
-final_error = np.array([arr[-1] for arr in error_plot_list])
-sns.regplot(x=initial_error, y=final_error, color='k', ax = ax[1, 0],
-            line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
-rsq, pval = pearsonr(initial_error, final_error)
-ax[1, 0].text(0.05, 0.9, f'$r^2$ = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax[1, 0].transAxes)
-# ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
-ax[1, 0].set_xlabel('Initial prediction error')
-ax[1, 0].set_ylabel('Final prediction error')
+# # #### Does it matter what the initial error is
+# # initial_error = np.array([arr[0] for arr in error_plot_list])
+# # final_error = np.array([arr[-1] for arr in error_plot_list])
+# # sns.regplot(x=initial_error, y=final_error, color='k', ax = ax[1, 0],
+# #             line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
+# # rsq, pval = pearsonr(initial_error, final_error)
+# # ax[1, 0].text(0.05, 0.9, f'$r^2$ = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax[1, 0].transAxes)
+# # # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
+# # ax[1, 0].set_xlabel('Initial prediction error')
+# # ax[1, 0].set_ylabel('Final prediction error')
 
-for i in range(n_reps):
-    sns.lineplot(log_bias_list[i], ax=ax[1, 1])
-ax[1, 1].set_xlabel("Add/remove steps")
-ax[1, 1].set_ylabel("Met_RMSE")
-ax[1, 1].set_title("%d replicate runs" % n_reps)
-# sns.regplot(x=initial_error, y=sim_length, color='k', ax = ax[1, 1],
-#             line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
-# rsq, pval = pearsonr(initial_error, sim_length)
-# ax[1, 1].text(0.05, 0.9, f'$r^2$ = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax[1, 1].transAxes)
-# # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
-# ax[1, 1].set_xlabel('Initial prediction error')
-# ax[1, 1].set_ylabel('Step number')
+# # for i in range(n_reps):
+# #     sns.lineplot(log_bias_list[i], ax=ax[1, 1])
+# # ax[1, 1].set_xlabel("Add/remove steps")
+# # ax[1, 1].set_ylabel("Met_RMSE")
+# # ax[1, 1].set_title("%d replicate runs" % n_reps)
+# # sns.regplot(x=initial_error, y=sim_length, color='k', ax = ax[1, 1],
+# #             line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
+# # rsq, pval = pearsonr(initial_error, sim_length)
+# # ax[1, 1].text(0.05, 0.9, f'$r^2$ = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax[1, 1].transAxes)
+# # # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
+# # ax[1, 1].set_xlabel('Initial prediction error')
+# # ax[1, 1].set_ylabel('Step number')
 
-f.suptitle('Network optimisation for %s' % cl)
-f.tight_layout()
-if figsave_flag:
-    f.savefig(fig_path+'/no-penalties-all-replicates-summary.png', dpi=300)
-    plt.close(f)
+# f.suptitle('Network optimisation for %s' % cl)
+# f.tight_layout()
+# if figsave_flag:
+#     f.savefig(fig_path+'/no-penalties-all-replicates-summary.png', dpi=300)
+#     plt.close(f)
 
 
 # %%
 ##### Check out the best performing network
 # pred_error_change = np.array([list[0]-list[-1] for list in log_bias_list])
-final_pred_error = np.array([arr[-1] for arr in log_bias_list])
+# final_pred_error = np.array([arr[-1] for arr in log_bias_list])
 
-i_best_net = np.where(final_pred_error == final_pred_error.min())[0]#np.where(pred_error_change == pred_error_change.max())[0]
-x_ori_best = x_ori_list[i_best_net].flatten()
-x_optim_best = x_optim_list[i_best_net].flatten()
+# i_best_net = np.where(final_pred_error == final_pred_error.min())[0]#np.where(pred_error_change == pred_error_change.max())[0]
+# x_ori_best = x_ori_list[i_best_net].flatten()
+# x_optim_best = x_optim_list[i_best_net].flatten()
 
-met_pred_before = metabolome_pred_before_list[i_best_net][0]
-met_pred_after = metabolome_pred_after_list[i_best_net][0]
+# met_pred_before = metabolome_pred_before_list[i_best_net][0]
+# met_pred_after = metabolome_pred_after_list[i_best_net][0]
 
-met_meas_before = metabolome_meas_before_list[i_best_net][0]
-met_meas_after = metabolome_meas_after_list[i_best_net][0]
+# met_meas_before = metabolome_meas_before_list[i_best_net][0]
+# met_meas_after = metabolome_meas_after_list[i_best_net][0]
 
 
 # %%
 ######## Convert x to net structure (convert the adjacency matrix into the edge list)
 
-max_links = MAX_ID_metabolites * MAX_ID_celltypes # maximal number of links = number of specis * number of metabolites
-net_temp, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net_raw)
+# max_links = MAX_ID_metabolites * MAX_ID_celltypes # maximal number of links = number of specis * number of metabolites
+# net_temp, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net_raw)
 
-######## Original network
-x_consumption = x_ori_best[:max_links]
-x_production = x_ori_best[max_links:]
+# ######## Original network
+# x_consumption = x_ori_best[:max_links]
+# x_production = x_ori_best[max_links:]
 
-a = net_temp.iloc[:max_links, 0].values
-b = net_temp.iloc[:max_links, 1].values
-c = np.where(x_consumption, 2, 0)
-net_added_consumption = pd.DataFrame({net_temp.columns[0]: a,
-                                        net_temp.columns[1]: b,
-                                        net_temp.columns[2]: c})
+# a = net_temp.iloc[:max_links, 0].values
+# b = net_temp.iloc[:max_links, 1].values
+# c = np.where(x_consumption, 2, 0)
+# net_added_consumption = pd.DataFrame({net_temp.columns[0]: a,
+#                                         net_temp.columns[1]: b,
+#                                         net_temp.columns[2]: c})
 
-a = net_temp.iloc[max_links:, 0].values
-b = net_temp.iloc[max_links:, 1].values
-c = np.where(x_production, 3, 0)
-net_added_production = pd.DataFrame({net_temp.columns[0]: a,
-                                        net_temp.columns[1]: b,
-                                        net_temp.columns[2]: c})
-net_ori = pd.concat([net_added_consumption, net_added_production])
+# a = net_temp.iloc[max_links:, 0].values
+# b = net_temp.iloc[max_links:, 1].values
+# c = np.where(x_production, 3, 0)
+# net_added_production = pd.DataFrame({net_temp.columns[0]: a,
+#                                         net_temp.columns[1]: b,
+#                                         net_temp.columns[2]: c})
+# net_ori = pd.concat([net_added_consumption, net_added_production])
 
-####### Optimised network
-x_consumption = x_optim_best[:max_links]
-x_production = x_optim_best[max_links:]
+# ####### Optimised network
+# x_consumption = x_optim_best[:max_links]
+# x_production = x_optim_best[max_links:]
 
-a = net_temp.iloc[:max_links, 0].values
-b = net_temp.iloc[:max_links, 1].values
-c = np.where(x_consumption, 2, 0)
-net_added_consumption = pd.DataFrame({net_temp.columns[0]: a,
-                                        net_temp.columns[1]: b,
-                                        net_temp.columns[2]: c})
+# a = net_temp.iloc[:max_links, 0].values
+# b = net_temp.iloc[:max_links, 1].values
+# c = np.where(x_consumption, 2, 0)
+# net_added_consumption = pd.DataFrame({net_temp.columns[0]: a,
+#                                         net_temp.columns[1]: b,
+#                                         net_temp.columns[2]: c})
 
-a = net_temp.iloc[max_links:, 0].values
-b = net_temp.iloc[max_links:, 1].values
-c = np.where(x_production, 3, 0)
-net_added_production = pd.DataFrame({net_temp.columns[0]: a,
-                                        net_temp.columns[1]: b,
-                                        net_temp.columns[2]: c})
-net_optim = pd.concat([net_added_consumption, net_added_production])
+# a = net_temp.iloc[max_links:, 0].values
+# b = net_temp.iloc[max_links:, 1].values
+# c = np.where(x_production, 3, 0)
+# net_added_production = pd.DataFrame({net_temp.columns[0]: a,
+#                                         net_temp.columns[1]: b,
+#                                         net_temp.columns[2]: c})
+# net_optim = pd.concat([net_added_consumption, net_added_production])
 
 
 # %%
 ######### Change in error with additions and deletions
-f = 0.1#f_arr[0]
-ec_corr_old, ct_full_old, mean_error_old, metabolome_pred_old, metabolome_measured_old = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_ori, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+# # f = 0.5#f_arr[0]
+# # ec_corr_old, ct_full_old, mean_error_old, metabolome_pred_old, metabolome_measured_old = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_ori, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
-ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_optim, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+# # ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_optim, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
-print('Metabolome deviation with old network is: ', mean_error_old)
-print('Metabolome deviation with improved network is: ', mean_error)
-print('------------------------------------------------------------------------')
+# # print('Metabolome deviation with old network is: ', mean_error_old)
+# # print('Metabolome deviation with improved network is: ', mean_error)
+# # print('------------------------------------------------------------------------')
 
-fig, ax = plt.subplots(1, 2, sharey=True, figsize=(7, 4))
-ax[0].loglog(met_pred_before, met_meas_before, 'ko')
-# ax[0].scatter(np.log10(metabolome_pred_old+1e-7), np.log10(metabolome_measured_old+1e-7), c='k', s=9)
-ax[0].axline((-2, -2), (3, 3), c='k')
-ax[0].set_title('Old network')
-# ax[0].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
-ax[0].set_ylabel(r'$log_{10}\ Empirical\ data$')
+# fig, ax = plt.subplots(1, 2, sharey=True, figsize=(7, 4))
+# ax[0].loglog(met_pred_before, met_meas_before, 'ko')
+# # ax[0].scatter(np.log10(metabolome_pred_old+1e-7), np.log10(metabolome_measured_old+1e-7), c='k', s=9)
+# ax[0].axline((-2, -2), (3, 3), c='k')
+# ax[0].set_title('Old network')
+# # ax[0].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
+# ax[0].set_ylabel(r'$log_{10}\ Empirical\ data$')
 
-ax[1].loglog(met_pred_after, met_meas_after, 'ko')
-# ax[1].scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=9)
-ax[1].axline((-2, -2), (2, 2), c='k')
-ax[1].set_title('New network')
-# ax[1].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
-# ax[1].set_ylabel(r'$log_{10}\ Empirical\ data$')
-fig.supxlabel(r'$log_{10}\ Predicted\ metabolome$')
-plt.tight_layout()
+# ax[1].loglog(met_pred_after, met_meas_after, 'ko')
+# # ax[1].scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=9)
+# ax[1].axline((-2, -2), (2, 2), c='k')
+# ax[1].set_title('New network')
+# # ax[1].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
+# # ax[1].set_ylabel(r'$log_{10}\ Empirical\ data$')
+# fig.supxlabel(r'$log_{10}\ Predicted\ metabolome$')
+# plt.tight_layout()
 
-if figsave_flag:
-    fig.savefig(fig_path+'/no-penalties-prediction-comparison.png', dpi=300)
-    plt.close(fig)
-else:
-    plt.show()
-# plt.scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=4)
+# if figsave_flag:
+#     fig.savefig(fig_path+'/no-penalties-prediction-comparison.png', dpi=300)
+#     plt.close(fig)
+# else:
+#     plt.show()
+# # plt.scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=4)
     
     
 # %%
-df_summary = pd.concat([df_con_links, df_pro_links])
+# df_summary = pd.concat([df_con_links, df_pro_links])
 
-plot_networks(net_ori, df_summary, 'original-net', n_reps, fig_path, figsave_flag)
-plot_networks(net_optim, df_summary, 'optimised-net', n_reps, fig_path, figsave_flag)
+# plot_networks(net_ori, df_summary, 'original-net', n_reps, fig_path, figsave_flag)
+# plot_networks(net_optim, df_summary, 'optimised-net', n_reps, fig_path, figsave_flag)
 
 # %%
-pickle_path = '../raw-output/'+str(k)+'-celltypes/'+net_state
-try:
-    os.makedirs(pickle_path)
-except:
-    pass
+# pickle_path = '../raw-output/'+str(k)+'-celltypes/'+net_state
+# try:
+#     os.makedirs(pickle_path)
+# except:
+#     pass
 
-pickle_out = open(pickle_path + "optimised_network_output.pickle","wb")
-#pickle.dump([net, i_selfish, i_intake, names], pickle_out)
-pickle.dump([x_ori_list, x_optim_list, n_reps, MAX_ID_celltypes, MAX_ID_metabolites], pickle_out, protocol=2)
-pickle_out.close()
+# pickle_out = open(pickle_path + "optimised_network_output.pickle","wb")
+# #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
+# pickle.dump([x_ori_list, x_optim_list, n_reps, MAX_ID_celltypes, MAX_ID_metabolites], pickle_out, protocol=2)
+# pickle_out.close()
 
 
 
@@ -754,10 +757,10 @@ all_params = np.array([0.5, cell_line_names[0],
               cellnum_init_all[0], cellnum_final_all[0],
               net_raw, diet, in_degree_flag,
               MAX_ID_metabolites, MAX_ID_celltypes,
-              1.5, 0., 0.], dtype=object)
+              0.02, 0., 0.], dtype=object)
 
 #### Sensitivity to kT-no penalty or reward
-kT_arr = np.repeat(np.array([0.5, 7.5, 1, 1.25, 1.5]), n_reps)
+kT_arr = np.repeat(np.array([1e-03, 0.5*1e-2, 1e-2, 0.5*1e-1, 1e-1]), n_reps)
 iter_params_list_kt = np.repeat(all_params[np.newaxis, :], len(kT_arr), 0)
 iter_params_list_kt[:, -3] = kT_arr.copy()
 
@@ -882,31 +885,43 @@ pickle_path = '../raw-output/'+str(4)+'-celltypes/'+net_state
 kt_df4, pn_df4, rw_df4 = pd.read_pickle(pickle_path + 'sensitivity-kt-penalty-reward.pickle')
 f_df4 = pd.read_pickle(pickle_path + "by-product-fraction.pickle")
 
-n_reps = 100
-kT_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
-penalty_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
-reward_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
+# n_reps = 50
+# kT_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
+# penalty_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
+# reward_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
 
 ct_num = np.array([np.repeat(1, len(kt_df1)), np.repeat(2, len(kt_df2)), np.repeat(3, len(kt_df3)), np.repeat(4, len(kt_df4))]).ravel()
 
 kt_df_all = pd.DataFrame({'kT': np.concatenate([kT_arr, kT_arr, kT_arr, kT_arr]),
                 'CTNum': ct_num,
-                'MeanError': np.concatenate([kt_df1.iloc[:, 1].values, kt_df2, kt_df3, kt_df3])})
+                'MeanError': np.concatenate([kt_df1.loc[:, 'rmse'].values,
+                                             kt_df2.loc[:, 'rmse'].values,
+                                             kt_df3.loc[:, 'rmse'].values,
+                                             kt_df4.loc[:, 'rmse'].values])})
 sns.lineplot(data=kt_df_all, x='CTNum', hue='kT', y='MeanError', palette='crest')
 
 
 pn_df_all = pd.DataFrame({'Penalty': np.concatenate([penalty_arr, penalty_arr, penalty_arr, penalty_arr]),
                 'CTNum': ct_num,
-                'MeanError': np.concatenate([pn_df1.iloc[:, 1].values, pn_df2, pn_df3, pn_df4])})
+                'MeanError': np.concatenate([pn_df1.loc[:, 'rmse'].values,
+                                             pn_df2.loc[:, 'rmse'].values,
+                                             pn_df3.loc[:, 'rmse'].values,
+                                             pn_df4.loc[:, 'rmse'].values])})
 sns.lineplot(data=pn_df_all, x='CTNum', hue='Penalty', y='MeanError', palette='crest')
 
 rw_df_all = pd.DataFrame({'Reward': np.concatenate([reward_arr, reward_arr, reward_arr, reward_arr]),
                 'CTNum': ct_num,
-                'MeanError': np.concatenate([rw_df1.iloc[:, 1].values, rw_df2, rw_df3, rw_df3])})
+                'MeanError': np.concatenate([rw_df1.loc[:, 'rmse'].values,
+                                             rw_df2.loc[:, 'rmse'].values,
+                                             rw_df3.loc[:, 'rmse'].values,
+                                             rw_df4.loc[:, 'rmse'].values])})
 sns.lineplot(data=rw_df_all, x='CTNum', hue='Reward', y='MeanError', palette='crest')
 
 # %%
-heatmap_df = pd.DataFrame(np.array([f_df4[0], f_df3[0], f_df2[0], f_df1[0].iloc[:, 0]]),
+heatmap_df = pd.DataFrame(np.array([f_df4[0].iloc[:, 0],
+                                    f_df3[0].iloc[:, 0],
+                                    f_df2[0].iloc[:, 0],
+                                    f_df1[0].iloc[:, 0]]),
                           columns=np.linspace(0.1, 1, 5), index=[4, 3, 2, 1])
 sns.heatmap(data=heatmap_df, cmap='crest',
             cbar_kws={'label': 'RMSE'})
@@ -918,11 +933,11 @@ n_reps = 50
 bias = ec_metabolome.iloc[:, 0].values - diet.values
 net_raw = generate_random_network(all_random_networks[0], bias)
 
-all_params = np.array([0.5, cell_line_names[0],
+all_params = np.array([0.3, cell_line_names[0],
               cellnum_init_all[0], cellnum_final_all[0],
               net_raw, diet, in_degree_flag,
               MAX_ID_metabolites, MAX_ID_celltypes,
-              0.0003, 0., 0.], dtype=object)
+              1.05, 0., 0.], dtype=object)
 
 reward_arr = np.repeat(np.array([0, 1e-4, 1e-3]), n_reps)
 iter_params_list_rw = np.repeat(all_params[np.newaxis, :], len(reward_arr), 0)
@@ -932,10 +947,10 @@ reward_vals = []
 reward_errors = []
 n_pred_before = []
 n_pred_after = []
-for params in iter_params_list_rw:
+for params in tqdm(iter_params_list_rw):
     all_data = run_network_optimisation(params)
     reward_vals.append(all_data[2])
-    reward_errors.append(all_data[3])
+    reward_errors.append(all_data[-1][-1])
     n_pred_before.append(all_data[4])
     n_pred_after.append(all_data[5])
 
@@ -946,11 +961,15 @@ for params in iter_params_list_rw:
 #     pool.close()
 #     pool.join()
 
-reward_test_df = pd.DataFrame({'reward': reward_vals, 'rmse': reward_errors, 'Original': n_pred_before, 'Optimised': n_pred_after})
+reward_test_df = pd.DataFrame({'reward': reward_vals,
+                               'rmse': reward_errors,
+                               'Original': n_pred_before,
+                               'Optimised': n_pred_after})
+
 reward_test_df = reward_test_df.melt(id_vars=['reward', 'rmse'], value_vars=['Original', 'Optimised'], value_name='NumPred', var_name='NetType')
 
 sns.boxplot(data=reward_test_df, x='NetType', y='NumPred', hue='reward', palette='crest')
 plt.xlabel('Network type')
 plt.ylabel('Number of metabolites predicted')
 
-# %%
+0.# %%
