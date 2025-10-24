@@ -213,7 +213,7 @@ def run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degr
 
     ### Taking out zeroes from the analysis
     i_nonzero = np.where((metabolome_pred_unfilt * metabolome_measured_unfilt) > 0, True, False)
-    i_filt = np.where((b2m.sum(0) > 0) * metabolome_measured_unfilt, True, False)
+    i_filt = np.where((b2m.sum(0) > 0), True, False)
     i_final = i_nonzero * i_filt
     metabolome_measured = metabolome_measured_unfilt[i_final]
     metabolome_pred = metabolome_pred_unfilt[i_final]
@@ -252,7 +252,7 @@ def generate_random_network(net, bias_metabolome):
     return rnet
 
 ####### Error function for GutCP-based algorithm
-def pred_error_addingLinks(x, net_ori, f, col_name, diet, in_degree_flag, cellnum_init, cellnum_max, pred_params):
+def pred_error_addingLinks(n_pred_init, x, net_ori, f, col_name, diet, in_degree_flag, cellnum_init, cellnum_max, pred_params):
     '''
     pred_error_addingLinks is a function used to compute the rms error between experimentally measured
     metagenome and predicted metagenome computed from the model for a certain nutrient intake. It relies on 
@@ -286,13 +286,13 @@ def pred_error_addingLinks(x, net_ori, f, col_name, diet, in_degree_flag, cellnu
     net = pd.concat([net_added_consumption, net_added_production])
     n_changed = len(np.where(net.iloc[:, -1].values != net_ori.iloc[:, -1].values)[0])
 
-    ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_predicted = run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_pred_new = run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
     penalty_param = pred_params['penalty']
     reward_param = pred_params['reward']
-    pred_errorTotal = mean_error - reward_param*n_predicted
+    pred_errorTotal = mean_error - np.where(n_pred_new > n_pred_init, reward_param, -penalty_param)
     
-    return [pred_errorTotal, metabolome_pred, metabolome_measured, i_final, bias_metabolome, mean_error, n_predicted]
+    return [pred_errorTotal, metabolome_pred, metabolome_measured, i_final, bias_metabolome, mean_error, n_pred_new]
 
 def calculate_priors(bias_metabolome):
         # Prior probability is simply a rescaled value of the bias for each metabolite; cell type frequency not included here because there is no reference "measured" value unlike the metabolite levels
@@ -345,12 +345,18 @@ def run_network_optimisation(all_params):
     b2m_ori = (b2m!=0).astype(int).copy()
     x_ori = np.concatenate([m2b_ori.flatten(), b2m_ori.flatten()]) # This is the adjacency matrix
     # fun = lambda x: pred_error_addingLinks(x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final)
+    ##### How many metabolites predicted non-trivialling in the initial network
+    metabolome_measured = ec_metabolome.loc[:, cl].values
+    i_nonzero = np.where(met_pred * metabolome_measured, True, False)
+    i_filt = np.where((b2m.sum(0) > 0), True, False)
+    i_final = i_nonzero * i_filt
+    n_pred_init = i_final.sum()
 
     # Bias in the metabolome is calculated as the difference between predicted and measured metabolite levels
     max_links = m2b.shape[0]*m2b.shape[1]
     pred_params = {'penalty': all_params[10], 'reward': all_params[11]}
 
-    error_before, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_met_bias_init, n_pred = pred_error_addingLinks(x_ori, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params)
+    error_before, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_met_bias_init, n_pred = pred_error_addingLinks(n_pred_init, x_ori, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params)
     metabolome_pred_list.append(metabolome_pred)
     metabolome_measured_list.append(metabolome_measured)
     valid_index_list.append(i_final)
@@ -381,7 +387,7 @@ def run_network_optimisation(all_params):
         else:
             continue
 
-        error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, n_pred = pred_error_addingLinks(x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
+        error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, n_pred = pred_error_addingLinks(n_pred_init, x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
         prior_prob = calculate_priors(bias_metabolome)
 
         if (n_pred >= 3) * (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
@@ -401,6 +407,7 @@ def run_network_optimisation(all_params):
             metabolome_measured_list.append(metabolome_measured)
             valid_index_list.append(i_final)
             n_pred_list.append(n_pred)
+            n_pred_init = n_pred
 
             if i_x < max_links:
                 row_num = i_x // m2b_ori.shape[1]
@@ -415,6 +422,8 @@ def run_network_optimisation(all_params):
         else:  ## not accepted   
             x[i_x] = x_ori[i_x] # Maintain the original state
             numStepsNotAdded += 1
+            n_pred_init = n_pred
+
         if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow)*kT)):
             break
     # n_pred_after = len(np.where(metabolome_pred_list[-1] > 0)[0])
@@ -511,7 +520,7 @@ for i, net in enumerate(all_networks):
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-n_reps = 25
+n_reps = 5
 i_cell_line = np.where(cell_line_names == 'A549-ATCC')[0][0]
 cl = cell_line_names[i_cell_line]
 f = 0.1
@@ -541,7 +550,7 @@ for i in np.arange(n_reps):
               cellnum_init, cellnum_final,
               net_raw, diet, in_degree_flag,
               MAX_ID_metabolites, MAX_ID_celltypes,
-              0.02, 0., 0.01], dtype=object)
+              0.02, 0.01, 0.05], dtype=object)
 
     kT, penalty, reward, f, x_ori, x, elist, n_pred, met_pred_list, met_measured_list, i_list, log_bias = run_network_optimisation(all_params)
 
@@ -594,7 +603,7 @@ df_pro_plot = df_pro_links.melt(id_vars='metabolite', var_name = 'linkType', val
 # %%
 ##### Visualising output
 net_state = 'optim-net/'
-figsave_flag = True
+figsave_flag = False
 fig_path = '../figures/'+str(k)+'-celltypes/'+net_state+cl
 try:
     os.makedirs(fig_path)
