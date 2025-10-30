@@ -74,22 +74,26 @@ for cl in ec_metabolome.columns.values:
     diff_ref = x - y
     rmse_ref.append(np.sqrt(np.mean(diff_ref**2)))
 
-    plt.scatter(x, y, c='k', s=50)
-    plt.plot(x, y_pred, 'r-', linewidth=2.5)
-    plt.plot(x, x, 'g', linestyle='dashed', linewidth=2.5)
-    plt.xlabel(r'$log_{10}\ Diet$')
-    plt.ylabel(r'$log_{10}\ Measured\ metabolome$')
-    plt.title(cl, fontsize=20)
+    fig, ax = plt.subplots(1, 1, figsize=(5, 4))
+    sns.set_style('dark')
+    ax = plt.scatter(x, y, c='k', s=50)
+    ax = plt.plot(x, y_pred, 'r-', linewidth=2.5)
+    ax = plt.plot(x, x-2, 'g', linestyle='dashed', linewidth=1.5)
+    plt.xlabel(r'$log_{10}\ Diet$', fontsize=17)
+    plt.ylabel(r'$log_{10}\ Measured\ metabolome$', fontsize=17)
+    plt.title(cl, fontsize=17)
+    plt.xticks(fontsize=13)
+    plt.yticks(fontsize=13)
     plt.text(x.min(), y.max()-0.2,
              f'Measured slope = {res.slope:.2f}', fontsize=15, c='r')
     plt.text(x.min(), y.max()-1,
              f'Reference slope = 1', fontsize=15, c='g')
     
     if figsave_flag:
-        plt.savefig(fig_path+'diet-scatter-'+cl+'.png', dpi=300)
-        plt.close()
+        fig.savefig(fig_path+'diet-scatter-'+cl+'.png', dpi=300, bbox_inches='tight')
+        plt.close(fig)
     else:
-        plt.show()
+        fig.show()
 
 slopes = np.array(slopes)
 slopes_err = np.array(slopes_err)
@@ -98,6 +102,7 @@ rmse_fitted = np.array(rmse_fitted)
 rmse_ref = np.array(rmse_ref)
 
 # %%
+figsave_flag = True
 slope_df = pd.DataFrame({'Cell line': ec_metabolome.columns.values, 'Slope': slopes,
                          'SE': slopes_err, 'CI': slopes_ci,
                          'Smin': slopes - slopes_ci, 'Smax': slopes + slopes_ci,
@@ -105,17 +110,32 @@ slope_df = pd.DataFrame({'Cell line': ec_metabolome.columns.values, 'Slope': slo
                          'PowerLaw': np.where(slopes + slopes_ci < 1, 'Sublinear', 'Linear')})
 ## Distribution of slopes
 fig_path = '../figures/power-law-plots/'
-sns.histplot(data=slope_df, x='Slope', hue='PowerLaw',
-             bins=12, stat='density',  element='step', 
-             alpha=0.65, fill=True, multiple='stack', palette='crest')
-plt.title('Diet vs metabolome slope')
+
+fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+sns.set_style('darkgrid')
+# sns.set_palette('crest', n_colors=2)
+sns.histplot(data=slope_df, x='Slope', hue='PowerLaw', palette=['tab:gray', 'tab:green'],
+             bins=12, stat='proportion',  element='step', 
+             alpha=0.75, fill=True, multiple='stack', ax=ax)
+sns.move_legend(ax, loc='upper right', bbox_to_anchor=(1.29, 1), fontsize=15, title='')
+mean_sublin = slope_df[slope_df['Smax'] < 1].loc[:, 'Slope'].mean()
+mean_lin = slope_df[slope_df['Smax'] >= 1].loc[:, 'Slope'].mean()
+plt.axvline(x=mean_sublin, linestyle='--', linewidth=4, c='r')
+plt.axvline(x=mean_lin, linestyle='--', linewidth=4, c='k')
+plt.title('Diet vs metabolome slope', fontsize=23)
+plt.xlabel('')
+plt.ylabel('Proportion', fontsize=20)
+plt.xticks(fontsize=17)
+plt.yticks(fontsize=17)
+plt.tick_params(axis='both', direction='out', length=5, color='k', width=3)
+
 if figsave_flag:
-    plt.savefig(fig_path+'distribution-of-slopes.png', dpi=300)
+    plt.savefig(fig_path+'distribution-of-slopes.png', dpi=300, bbox_inches='tight')
 
 # %%
 ## CIs of slopes and RMSE-forest plots
 slope_df.loc[:, 'Del_RMSE'] = slope_df.loc[:, 'RMSE_Fitted'] - slope_df.loc[:, 'RMSE_Ref']
-
+slope_df.loc[:, 'SortbyCol'] = -slope_df.loc[:, 'Smax']
 # f, ax = plt.subplots(1, 2)
 ax = fp.forestplot(slope_df,  # the dataframe with results data
               estimate="Slope",  # col containing estimated effect size 
@@ -123,8 +143,8 @@ ax = fp.forestplot(slope_df,  # the dataframe with results data
               varlabel="Cell line",  # column containing variable label
               color_alt_rows=True,
               xlabel=r'Slope $\pm$ 95% CI',
-              ci_report=True, flush=False,
-              sort=True, sortby='Smax',
+              ci_report=False, flush=False,
+              sort=True, sortby='SortbyCol',
               figsize=(4, 16))
 ax.axvline(x=1, ymax=0.96, c='r', linestyle='dashed', linewidth=2)
 plt.savefig(fig_path+'slopes-forest-plot.png', bbox_inches='tight', dpi=300)
@@ -137,7 +157,7 @@ ax = fp.forestplot(slope_df,  # the dataframe with results data
               color_alt_rows=True,
               xlabel=r'$\Delta$ RMSE = Fitted $-$ Reference',
               ci_report=False,
-              sort=True, sortby='Smax',
+              sort=True, sortby='SortbyCol',
               xticks=[-0.1, -0.075, -0.05, -0.025, 0, 0.025],
               figsize=(5, 15))
 plt.savefig(fig_path+'del-rmse-forest-plot.png', bbox_inches='tight', dpi=300)
