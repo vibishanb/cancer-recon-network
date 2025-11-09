@@ -729,6 +729,7 @@ rmse_df.groupby(['f']).plot(x='Celltype number', y='mean', yerr='sd',
 
 
 # %%
+########### Sensitivity for reward-penalty combinations
 home_dir = os.getcwd()
 n_ct = 2
 all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
@@ -840,125 +841,133 @@ plt.savefig(fig_path + '/sensitivity-penalty-cross-reward-npred.png', dpi=300)
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-home_dir = os.getcwd()
-n_ct = 1
-all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
-# i_selfish = 0
+for n_ct in tqdm(range(2, 5), desc='n_ct'):
+    home_dir = os.getcwd()
+    # n_ct = 1
+    all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
+    # i_selfish = 0
 
-# pickle_in = open("data.pickle","rb")
-celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-data.pickle')
+    # pickle_in = open("data.pickle","rb")
+    celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-data.pickle')
 
-slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
-nets_temp = all_networks.copy()
+    slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
+    nets_temp = all_networks.copy()
 
-### Filtering those networks for cell lines with power law slopes
-i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_lines))[0]
-all_networks = []
-for i in i_sublinear:
-    all_networks.append(nets_temp[i])
-ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
+    ### Filtering those networks for cell lines with power law slopes
+    i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_lines))[0]
+    all_networks = []
+    for i in i_sublinear:
+        all_networks.append(nets_temp[i])
+    ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
 
-i_nonzero_celltypes = all_networks[0]['celltypes_ID'].unique()
-i_nonzero_celltypes = np.sort(i_nonzero_celltypes)
-i_nonzero_celltypes = celltype_ID.values.copy()
-i_nonzero_metabolites = all_networks[0]['metabolites_ID'].unique()
+    ######## Diet as the average of all the Baseline values
+    diet = met_baseline.mean(axis=1)
 
-MAX_ID_celltypes = len(i_nonzero_celltypes)  # MAX_ID_celltypes is the maximum of ID labels for celltypes.
-MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
+    ## Source for initial and final cell numbers for the various cell lines: https://www.thermofisher.com/in/en/home/references/gibco-cell-culture-basics/cell-culture-protocols/cell-culture-useful-numbers.html
+    n_lines = len(core_mean.loc[:, 'Cell line'])
+    # nonadh_cell_lines = ['SR', 'MOLT-4', 'HL-60(TB)', 'K562', 'RPMI 8226', 'CCRF-CEM']
+    # i_nonadh = np.where(np.isin(core_mean.loc[:, 'Cell line'], nonadh_cell_lines))[0]
 
-n_reps = 50
-i_cell_line = np.where(cell_line_names == 'A549-ATCC')[0][0]
-cl = cell_line_names[i_cell_line]
-f = 0.5
+    t75_cell_lines = ['NCI-H460', 'HCC-2998', 'SW620']
+    i_t75 = np.where(np.isin(cell_line_names, t75_cell_lines))[0]
+    cellnum_init_all = np.array([4.9e+06]*n_lines)
+    cellnum_init_all[i_t75] = 2.1e+06
+    cellnum_final_all = np.array([23.3e+06]*n_lines)
+    cellnum_final_all[i_t75] = 8.4e+06
 
-cellnum_init = cellnum_init_all[i_cell_line]
-cellnum_final = cellnum_final_all[i_cell_line]
-bias = np.log10(ec_metabolome.iloc[:, i_cell_line].values + 1e-6) - np.log10(diet.values + 1e-6)
+    cellnum_init_all = cellnum_init_all[i_sublinear]
+    cellnum_final_all = cellnum_final_all[i_sublinear]
 
-x_optim_list = [[]]
-x_ori_list = [[]]
-error_list_all_reps = [[]]
-log_bias_list = [[]]
-metabolome_pred_before_list = [[]]
-metabolome_meas_before_list = [[]]
-metabolome_pred_after_list = [[]]
-metabolome_meas_after_list = [[]]
-valid_index_before_list = [[]]
-valid_index_after_list = [[]]
-n_pred_list = [[]]
+    i_nonzero_celltypes = all_networks[0]['celltypes_ID'].unique()
+    i_nonzero_celltypes = np.sort(i_nonzero_celltypes)
+    i_nonzero_celltypes = celltype_ID.values.copy()
+    i_nonzero_metabolites = all_networks[0]['metabolites_ID'].unique()
 
-in_degree_flag = False
+    MAX_ID_celltypes = len(i_nonzero_celltypes)  # MAX_ID_celltypes is the maximum of ID labels for celltypes.
+    MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
 
-for i in np.arange(n_reps):
-    net_raw = generate_random_network(all_random_networks[i_cell_line], bias)
+    cell_line_names = ec_metabolome.columns.to_numpy()
+    for i_cell_line in tqdm(range(len(cell_line_names)), desc='Cell lines', leave=False):
+        # i_cell_line = np.where(cell_line_names == 'A549-ATCC')[0][0]
+        cl = cell_line_names[i_cell_line]
+        f = 0.5
 
-    all_params = np.array([f, cl,
-              cellnum_init, cellnum_final,
-              net_raw, diet, in_degree_flag,
-              MAX_ID_metabolites, MAX_ID_celltypes,
-              0.003, 0., 0.], dtype=object)
+        cellnum_init = cellnum_init_all[i_cell_line]
+        cellnum_final = cellnum_final_all[i_cell_line]
+        bias = np.log10(ec_metabolome.iloc[:, i_cell_line].values + 1e-6) - np.log10(diet.values + 1e-6)
 
-    kT, penalty, reward, f, x_ori, x, elist, n_pred, met_pred_list, met_measured_list, i_list, log_bias = run_network_optimisation(all_params)
+        reward_arr = np.array([0., 0.01])
+        penalty_arr = np.array([0., 0.01])
 
-    x_ori_list.append(x_ori)
-    x_optim_list.append(x)
-    error_list_all_reps.append(elist)
-    log_bias_list.append(log_bias)
-    n_pred_list.append(n_pred)
-    metabolome_pred_before_list.append(met_pred_list[0])
-    metabolome_pred_after_list.append(met_pred_list[-1])
-    metabolome_meas_before_list.append(met_measured_list[0])
-    metabolome_meas_after_list.append(met_measured_list[-1])
-    valid_index_before_list.append(i_list[0])
-    valid_index_after_list.append(i_list[-1])
+        in_degree_flag = False
 
-    print('Round', i+1, ', initial rmse is', log_bias[0])
-    print('Network optmisation ended with final rmse', log_bias[-1])
-    print(n_pred[0], 'metabolites predicted initially and', n_pred[-1], 'after optimisation')
-    print('------------------')
+        for k in range(len(reward_arr)):
+            x_optim_list = [[]]
+            x_ori_list = [[]]
+            error_list_all_reps = [[]]
+            log_bias_list = [[]]
+            metabolome_pred_before_list = [[]]
+            metabolome_meas_before_list = [[]]
+            metabolome_pred_after_list = [[]]
+            metabolome_meas_after_list = [[]]
+            valid_index_before_list = [[]]
+            valid_index_after_list = [[]]
+            n_pred_list = [[]]
 
-x_ori_list = np.array(x_ori_list[1:])
-x_optim_list = np.array(x_optim_list[1:])
-error_plot_list = np.array(error_list_all_reps[1:], dtype=object)
-log_bias_list = np.array(log_bias_list[1:], dtype=object)
-n_pred_list = np.array(n_pred_list[1:], dtype=object)
-metabolome_pred_before_list = np.array(metabolome_pred_before_list[1:], dtype=object)
-metabolome_pred_after_list = np.array(metabolome_pred_after_list[1:], dtype=object)
-metabolome_meas_before_list = np.array(metabolome_meas_before_list[1:], dtype=object)
-metabolome_meas_after_list = np.array(metabolome_meas_after_list[1:], dtype=object)
-valid_index_before_list = np.array(valid_index_before_list[1:], dtype=object)
-valid_index_after_list = np.array(valid_index_after_list[1:], dtype=object)
+            n_reps = 100
+            for i in np.arange(n_reps):
+                net_raw = generate_random_network(all_networks[i_cell_line], bias)
+                all_params = np.array([f, cl,
+                        cellnum_init, cellnum_final,
+                        net_raw, diet, in_degree_flag,
+                        MAX_ID_metabolites, MAX_ID_celltypes,
+                        0.003, penalty_arr[k], reward_arr[k]], dtype=object)
 
-max_links = MAX_ID_metabolites*MAX_ID_celltypes
-con_links_all = np.array([arr[:max_links] for arr in x_optim_list - x_ori_list])
-pro_links_all = np.array([arr[max_links:] for arr in x_optim_list - x_ori_list])
-df_con_links = pd.DataFrame(con_links_all.T)
-df_pro_links = pd.DataFrame(pro_links_all.T)
+                kT, penalty, reward, f, x_ori, x, elist, n_pred, met_pred_list, met_measured_list, i_list, log_bias = run_network_optimisation(all_params)
 
-df_con_links.loc[:, 'added'] = np.array([np.where(i==1)[0].shape[0] for i in con_links_all.T])
-df_con_links.loc[:, 'removed'] = np.array([np.where(i==-1)[0].shape[0] for i in con_links_all.T])
-df_pro_links.loc[:, 'added'] = np.array([np.where(i==1)[0].shape[0] for i in pro_links_all.T])
-df_pro_links.loc[:, 'removed'] = np.array([np.where(i==-1)[0].shape[0] for i in pro_links_all.T])
-df_con_links.reset_index(names='metabolite', inplace=True)
-df_pro_links.reset_index(names='metabolite', inplace=True)
+                x_ori_list.append(x_ori)
+                x_optim_list.append(x)
+                error_list_all_reps.append(elist)
+                log_bias_list.append(log_bias)
+                n_pred_list.append(n_pred)
+                metabolome_pred_before_list.append(met_pred_list[0])
+                metabolome_pred_after_list.append(met_pred_list[-1])
+                metabolome_meas_before_list.append(met_measured_list[0])
+                metabolome_meas_after_list.append(met_measured_list[-1])
+                valid_index_before_list.append(i_list[0])
+                valid_index_after_list.append(i_list[-1])
 
-df_con_plot = df_con_links.melt(id_vars='metabolite', var_name = 'linkType', value_vars=['added', 'removed'], value_name='linkNumber', ignore_index=False)
-df_pro_plot = df_pro_links.melt(id_vars='metabolite', var_name = 'linkType', value_vars=['added', 'removed'], value_name='linkNumber', ignore_index=False)
+                # print('Round', i+1, ', initial rmse is', log_bias[0])
+                # print('Network optmisation ended with final rmse', log_bias[-1])
+                # print(n_pred[0], 'metabolites predicted initially and', n_pred[-1], 'after optimisation')
+                # print('------------------')
 
-net_state = 'optim-net/'
-pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/'+net_state+cl
-try:
-    os.makedirs(pickle_path)
-except:
-    pass
+            x_ori_list = np.array(x_ori_list[1:])
+            x_optim_list = np.array(x_optim_list[1:])
+            error_plot_list = np.array(error_list_all_reps[1:], dtype=object)
+            log_bias_list = np.array(log_bias_list[1:], dtype=object)
+            n_pred_list = np.array(n_pred_list[1:], dtype=object)
+            metabolome_pred_before_list = np.array(metabolome_pred_before_list[1:], dtype=object)
+            metabolome_pred_after_list = np.array(metabolome_pred_after_list[1:], dtype=object)
+            metabolome_meas_before_list = np.array(metabolome_meas_before_list[1:], dtype=object)
+            metabolome_meas_after_list = np.array(metabolome_meas_after_list[1:], dtype=object)
+            valid_index_before_list = np.array(valid_index_before_list[1:], dtype=object)
+            valid_index_after_list = np.array(valid_index_after_list[1:], dtype=object)
 
-pickle_out = open(pickle_path + "/reward-"+str(all_params[-1])+"-penalty-"+str(all_params[-2])+"-optimised_network_output.pickle", "wb")
-#pickle.dump([net, i_selfish, i_intake, names], pickle_out)
-pickle.dump([x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list,
-             metabolome_pred_before_list, metabolome_meas_before_list,
-             metabolome_pred_after_list, metabolome_meas_after_list,
-             valid_index_before_list, valid_index_after_list], pickle_out, protocol=2)
-pickle_out.close()
+            net_state = 'optim-net/'
+            pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/'+net_state+cl
+            try:
+                os.makedirs(pickle_path)
+            except:
+                pass
+
+            pickle_out = open(pickle_path + "/reward-"+str(all_params[-1])+"-penalty-"+str(all_params[-2])+"-optimised_network_output.pickle", "wb")
+            #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
+            pickle.dump([x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list,
+                        metabolome_pred_before_list, metabolome_meas_before_list,
+                        metabolome_pred_after_list, metabolome_meas_after_list,
+                        valid_index_before_list, valid_index_after_list], pickle_out, protocol=2)
+            pickle_out.close()
 
 # %%
 ##### Visualising output

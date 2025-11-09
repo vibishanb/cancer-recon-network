@@ -39,8 +39,8 @@ Figure 1 has been generated using a self-contained script called cancer-power-la
 # %%
 #### Figure 2: Single cell type model predictions-error reduction and number of metabolites predicted non-trivially
 pickle_path = '../raw-output/1-celltypes/optim-net/A549-ATCC'
-reward = 0.01
-penalty = 0.01
+reward = 0.
+penalty = 0.
 
 [x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list,
              metabolome_pred_before_list, metabolome_meas_before_list,
@@ -163,4 +163,35 @@ if figsave_flag:
     plt.close(fig)
 else:
     plt.show()
+
+
 # %%
+######### Figure 2
+
+num_pred_init = np.array([arr[1] for arr in n_pred_list])
+init_error = np.array([arr[0] for arr in log_bias_list])
+
+num_pred_final = np.array([arr[-1] for arr in n_pred_list])
+final_error = np.array([arr[-1] for arr in log_bias_list])
+init_centroid = np.array([num_pred_init.mean(), init_error.mean()])
+final_centroid = np.array([num_pred_final.mean(), final_error.mean()])
+v = final_centroid - init_centroid
+
+points_df = pd.DataFrame({'NetState': np.repeat(['Initial', 'Final'], n_reps),
+              'NumPred': np.concatenate([num_pred_init, num_pred_final]),
+               'RMSE': np.concatenate([init_error, final_error])})
+
+ax = sns.jointplot(data=points_df, x='NumPred', y='RMSE',
+                    hue='NetState', palette='crest',
+                    s=30, alpha=1, zorder=2)
+ax = plt.plot(init_centroid[0], init_centroid[1], zorder=3,
+              color=sns.cm.crest(0.1), markeredgecolor='k', marker='X', markersize=10)
+ax = plt.plot(final_centroid[0], final_centroid[1], zorder=3,
+              color=sns.cm.crest(0.8), markeredgecolor='k', marker='X', markersize=10)
+
+colors = plt.cm.gist_yarg(np.linspace(0, 0.7, 100))
+for i in range(n_reps):
+    ax = sns.lineplot(x=n_pred_list[i][1:], y=log_bias_list[i],
+                estimator=None, c=colors[i], linewidth=1.5,
+                sort=False, alpha=0.5, zorder=1)
+    
