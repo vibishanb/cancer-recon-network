@@ -38,9 +38,10 @@ Figure 1 has been generated using a self-contained script called cancer-power-la
 """
 # %%
 #### Figure 2: Single cell type model predictions-error reduction and number of metabolites predicted non-trivially
+#### Data import
 pickle_path = '../raw-output/1-celltypes/optim-net/A549-ATCC'
-reward = 0.
-penalty = 0.
+reward = 0.1
+penalty = 0.1
 
 [x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list,
              metabolome_pred_before_list, metabolome_meas_before_list,
@@ -48,6 +49,8 @@ penalty = 0.
              valid_index_before_list, valid_index_after_list] = pd.read_pickle(pickle_path + '/reward-'+str(reward)+'-penalty-'+str(penalty)+'-optimised_network_output.pickle')
 n_reps = len(n_pred_list)
 
+
+# %%
 fig = plt.figure(figsize=(14, 10))
 gs = GridSpec(2, 3, figure=fig)
 gs01 = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[:, :2])
@@ -167,7 +170,6 @@ else:
 
 # %%
 ######### Figure 2
-
 num_pred_init = np.array([arr[1] for arr in n_pred_list])
 init_error = np.array([arr[0] for arr in log_bias_list])
 
@@ -177,9 +179,13 @@ init_centroid = np.array([num_pred_init.mean(), init_error.mean()])
 final_centroid = np.array([num_pred_final.mean(), final_error.mean()])
 v = final_centroid - init_centroid
 
+sparse_init = np.array([arr.sum()/len(arr) for arr in x_ori_list])
+sparse_final = np.array([arr.sum()/len(arr) for arr in x_optim_list])
+
 points_df = pd.DataFrame({'NetState': np.repeat(['Initial', 'Final'], n_reps),
               'NumPred': np.concatenate([num_pred_init, num_pred_final]),
-               'RMSE': np.concatenate([init_error, final_error])})
+               'RMSE': np.concatenate([init_error, final_error]),
+               'Sparsity': np.concatenate([sparse_init, sparse_final])})
 
 ax = sns.jointplot(data=points_df, x='NumPred', y='RMSE',
                     hue='NetState', palette='crest',
@@ -194,4 +200,120 @@ for i in range(n_reps):
     ax = sns.lineplot(x=n_pred_list[i][1:], y=log_bias_list[i],
                 estimator=None, c=colors[i], linewidth=1.5,
                 sort=False, alpha=0.5, zorder=1)
-    
+ax.quiver(init_centroid[0], init_centroid[1], v[0], v[1],
+          angles='xy', scale_units='xy', scale=1.1, zorder=2,
+          width=0.015,
+          headwidth=3, headlength=5, headaxislength=5, color='tab:red', alpha=0.9,
+          edgecolor='k', linewidth=0.7)
+# plt.text(x=0.55, y=0.3, s=r'X$\hat{\imath}$ + Y$\hat{\jmath}$',
+#          fontdict={'color': 'tab:red', 'rotation': 0}, transform=ax.transAxes) 
+plt.show()
+
+g = sns.JointGrid(x=num_pred_init, y=init_error,
+                  xlim=(num_pred_init.min()-1, num_pred_init.max()+1),
+                  ylim=(init_error.min()-0.25, init_error.max()+0.25),
+                  marginal_ticks=False, space=0.01)
+g.plot_joint(sns.regplot, color='k',
+            line_kws={'color': 'tab:red', 'linewidth': 2}, scatter_kws={'s': 25, 'edgecolor': 'k', 'alpha': 0.6})
+g.plot_marginals(sns.kdeplot, fill=True, color='tab:red')
+rho, pval = spearmanr(num_pred_init, init_error)
+
+g.ax_joint.text(x=0.25, y=0.03, s=f'Spearman\'s $\\rho$ = {rho:.2f}', transform=g.ax_joint.transAxes)
+g.ax_joint.set_xlabel('# metabolites predicted')
+g.ax_joint.set_ylabel('RMSE')
+g.figure.suptitle('Initial network prediction')
+g.figure.tight_layout()
+
+g = sns.JointGrid(x=num_pred_final, y=final_error,
+                  xlim=(num_pred_final.min()-1, num_pred_final.max()+1),
+                  ylim=(final_error.min()-0.25, final_error.max()+0.25),
+                  marginal_ticks=False, space=0.01)
+g.plot_joint(sns.regplot, color='k',
+            line_kws={'color': 'tab:red', 'linewidth': 2}, scatter_kws={'s': 25, 'edgecolor': 'k', 'alpha': 0.6})
+g.plot_marginals(sns.kdeplot, fill=True, color='tab:red')
+rho, pval = spearmanr(num_pred_final, final_error)
+
+g.ax_joint.text(x=0.25, y=0.03, s=f'Spearman\'s $\\rho$ = {rho:.2f}', transform=g.ax_joint.transAxes)
+g.ax_joint.set_xlabel('# metabolites predicted')
+g.ax_joint.set_ylabel('RMSE')
+g.figure.suptitle('Final network prediction')
+g.figure.tight_layout()
+
+# %%
+######### Sparsity as the proportion of present links
+sns.kdeplot(data=points_df, x='Sparsity', hue='NetState', palette='crest', fill=True)
+plt.xlabel('Proportion of present links')
+plt.suptitle('Sparsity of networks; '+str(n_reps)+' replicates')
+plt.title(f'Reward = {reward:.2f}; Penalty = {penalty:.2f}')
+plt.tight_layout()
+
+
+# %%
+#### Data import
+home_dir = os.getcwd()
+slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
+
+vector_arr = []
+angle_arr = []
+magnitude_arr = []
+for cl in sublinear_cell_lines:
+    pickle_path = '../raw-output/1-celltypes/optim-net/'+cl
+    reward = 0.5
+    penalty = 0.5
+
+    [x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list,
+                metabolome_pred_before_list, metabolome_meas_before_list,
+                metabolome_pred_after_list, metabolome_meas_after_list,
+                valid_index_before_list, valid_index_after_list] = pd.read_pickle(pickle_path + '/reward-'+str(reward)+'-penalty-'+str(penalty)+'-optimised_network_output.pickle')
+    n_reps = len(n_pred_list)
+
+    num_pred_init = np.array([arr[1] for arr in n_pred_list])
+    init_error = np.array([arr[0] for arr in log_bias_list])
+
+    num_pred_final = np.array([arr[-1] for arr in n_pred_list])
+    final_error = np.array([arr[-1] for arr in log_bias_list])
+    init_centroid = np.array([num_pred_init.mean(), init_error.mean()])
+    final_centroid = np.array([num_pred_final.mean(), final_error.mean()])
+
+    v = final_centroid - init_centroid
+    vector_arr.append(v)
+    angle_arr.append(np.arctan2(v[1], v[0]))
+    magnitude_arr.append(np.linalg.norm(v))
+
+vector_arr = np.array(vector_arr)
+angle_arr = np.array(angle_arr)
+magnitude_arr = np.array(magnitude_arr)
+
+heatmap_df = pd.DataFrame({'Cell line': sublinear_cell_lines,
+                           'Magnitude': magnitude_arr,
+                           'Direction': angle_arr,
+                           'X': vector_arr[:, 0],
+                           'Y': vector_arr[:, 1]})
+
+# fig, ax = plt.subplots(2, 1, sharex=True, figsize=(16, 5))
+# sns.barplot(data=heatmap_df, x='Cell line', y='Magnitude', ax=ax[0])
+# ax[0].spines.top.set_visible(False)
+# ax[0].spines.right.set_visible(False)
+
+# sns.barplot(data=heatmap_df, x='Cell line', y='Direction', ax=ax[1])
+# ax[1].spines.top.set_visible(False)
+# ax[1].spines.right.set_visible(False)
+# ax[1].tick_params(axis='x', labelrotation=70, labelsize=12.5)
+# fig.tight_layout()
+
+# vector_df = heatmap_df.melt(id_vars=['Cell line'], value_vars=['X', 'Y'],
+#                             value_name='Value', var_name='Component')
+
+fig, ax = plt.subplots(2, 1, sharex=True, figsize=(16, 5))
+sns.barplot(data=heatmap_df, x='Cell line', y='X', ax=ax[0], color='tab:red', alpha=0.9)
+ax[0].spines.top.set_visible(False)
+ax[0].spines.right.set_visible(False)
+
+sns.barplot(data=heatmap_df, x='Cell line', y='Y', ax=ax[1], color='tab:red', alpha=0.9)
+ax[1].spines.top.set_visible(False)
+ax[1].spines.right.set_visible(False)
+ax[1].tick_params(axis='x', labelrotation=70, labelsize=12.5)
+
+fig.suptitle('Vector components; reward='+str(reward)+'; penalty='+str(penalty))
+fig.tight_layout()
+# %%

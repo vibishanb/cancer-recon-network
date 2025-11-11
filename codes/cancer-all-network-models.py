@@ -841,7 +841,7 @@ plt.savefig(fig_path + '/sensitivity-penalty-cross-reward-npred.png', dpi=300)
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-for n_ct in tqdm(range(2, 5), desc='n_ct'):
+for n_ct in tqdm(range(1, 2), desc='n_ct'):
     home_dir = os.getcwd()
     # n_ct = 1
     all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
@@ -849,6 +849,7 @@ for n_ct in tqdm(range(2, 5), desc='n_ct'):
 
     # pickle_in = open("data.pickle","rb")
     celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-data.pickle')
+    cell_line_names = ec_metabolome.columns.to_numpy()
 
     slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
     nets_temp = all_networks.copy()
@@ -896,8 +897,8 @@ for n_ct in tqdm(range(2, 5), desc='n_ct'):
         cellnum_final = cellnum_final_all[i_cell_line]
         bias = np.log10(ec_metabolome.iloc[:, i_cell_line].values + 1e-6) - np.log10(diet.values + 1e-6)
 
-        reward_arr = np.array([0., 0.01])
-        penalty_arr = np.array([0., 0.01])
+        reward_arr = np.array([0.1, 0.5])
+        penalty_arr = np.array([0.1, 0.5])
 
         in_degree_flag = False
 
