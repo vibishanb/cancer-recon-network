@@ -841,7 +841,7 @@ plt.savefig(fig_path + '/sensitivity-penalty-cross-reward-npred.png', dpi=300)
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-for n_ct in tqdm(range(1, 2), desc='n_ct'):
+for n_ct in tqdm(range(2, 5), desc='n_ct'):
     home_dir = os.getcwd()
     # n_ct = 1
     all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
