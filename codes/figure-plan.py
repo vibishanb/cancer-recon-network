@@ -39,20 +39,21 @@ Figure 1 has been generated using a self-contained script called cancer-power-la
 # %%
 #### Figure 2: Single cell type model predictions-error reduction and number of metabolites predicted non-trivially
 #### Data import
-pickle_path = '../raw-output/2-celltypes/optim-net/A549-ATCC'
-reward = 0.
-penalty = 0.
+pickle_path = '../raw-output/2-celltypes/optim-net/balance-partition/A549-ATCC'
+reward = 0.1
+penalty = 0.1
 
-[x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list,
+[x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list, residual_list, balance_flag_list,
              metabolome_pred_before_list, metabolome_meas_before_list,
              metabolome_pred_after_list, metabolome_meas_after_list,
              valid_index_before_list, valid_index_after_list] = pd.read_pickle(pickle_path + '/reward-'+str(reward)+'-penalty-'+str(penalty)+'-optimised_network_output.pickle')
 n_reps = len(n_pred_list)
+max_links = int(len(x_ori_list[0].flatten())/2)
 
 
 # %%
 ##### Figures in slides 3-6 of network-figure-plan.pptx
-fig = plt.figure(figsize=(14, 10))
+fig = plt.figure(figsize=(17, 10))
 gs = GridSpec(2, 3, figure=fig)
 gs01 = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[:, :2])
 gs02 = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[:, 2])
@@ -78,38 +79,48 @@ for i in range(n_reps):
     sns.lineplot(n_pred_list[i], ax=ax2, linewidth=2.5)
 ax2.set_xlabel("Add/remove steps")
 ax2.set_ylabel("# metabolites predicted")
-ax2.spines.top.set_visible(False)
-ax2.spines.right.set_visible(False)
+# ax2.spines.top.set_visible(False)
+# ax2.spines.right.set_visible(False)
 
-#### How many steps of add/remove on average
-sim_length = np.zeros(n_reps)
-for i in range(n_reps):
-    sim_length[i] = len(error_plot_list[i])
-sns.histplot(sim_length, fill=True, element='step', 
-             stat='proportion', alpha=0.25, bins=10, kde=True, ax=ax3)
-ax3.set_xlabel('# add/remove steps')
-ax3.spines.top.set_visible(False)
-ax3.spines.right.set_visible(False)
-# ax3.spines.left.set_visible(False)
-# ax3.set_title("Step number distribution")
+
+# #### How many steps of add/remove on average
+# sim_length = np.zeros(n_reps)
+# for i in range(n_reps):
+#     sim_length[i] = len(error_plot_list[i])
+# sns.histplot(sim_length, fill=True, element='step', 
+#              stat='proportion', alpha=0.25, bins=10, kde=True, ax=ax3)
+# ax3.set_xlabel('# add/remove steps')
+# # ax3.spines.top.set_visible(False)
+# # ax3.spines.right.set_visible(False)
+# # ax3.spines.left.set_visible(False)
+# # ax3.set_title("Step number distribution")
 
 #### More non-trivially predicted metabolites means more error?
 num_pred = np.array([arr[-1] for arr in n_pred_list])
 final_error = np.array([arr[-1] for arr in log_bias_list])
-sns.regplot(x=num_pred, y=final_error, color='k', ax = ax4,
+sns.regplot(x=num_pred, y=final_error, color='k', ax = ax3,
             line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
 rho, pval = spearmanr(num_pred, final_error)
-ax4.text(0.3, 0.05, f'Spearman\'s $\\rho$ = {rho:.2f}', transform=ax4.transAxes) #, p-value = {pval:.2f}
+ax3.text(0.3, 0.05, f'Spearman\'s $\\rho$ = {rho:.2f}', transform=ax3.transAxes) #, p-value = {pval:.2f}
 # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
-ax4.set_xlabel('# metabolites predicted')
-ax4.set_ylabel('Final RMSE')
-ax4.spines.top.set_visible(False)
-ax4.spines.right.set_visible(False)
-ax4.spines.left.set_bounds(final_error.min(), final_error.max())
-ax4.spines.bottom.set_bounds(num_pred.min(), num_pred.max())
+ax3.set_xlabel('# metabolites predicted')
+ax3.set_ylabel('Final RMSE')
+ax3.spines.top.set_visible(False)
+ax3.spines.right.set_visible(False)
+ax3.spines.left.set_bounds(final_error.min(), final_error.max())
+ax3.spines.bottom.set_bounds(num_pred.min(), num_pred.max())
+
+#### Normalised residual production fraction-how does balance change during optimisation?
+log_residual_list = [np.log10(np.array(arr) + 1e-5) for arr in residual_list]
+for i in range(n_reps):
+    sns.lineplot(residual_list[i], ax=ax4, linewidth=2.5)
+# ax4.fill_between(x=ax4.get_xlim(), y1=0, y2=-1,
+#                  alpha=0.4, color='tab:green', lw=2, ls='--')
+ax4.set_ylabel(r"$\chi_{excess}$")
+ax4.set_xlabel('Add/remove steps')
 
 fig.suptitle('Reward = '+str(reward)+'; Penalty = '+str(penalty))
-fig.tight_layout()
+# fig.tight_layout()
 
 figsave_flag = False
 fig_path = '../figures/2-celltypes/optim-net/A549-ATCC'
@@ -122,12 +133,19 @@ if figsave_flag:
     plt.close(fig)
 
 ##### Check out the best performing network
-pred_error_change = np.array([list[0]-list[-1] for list in log_bias_list])
+# pred_error_change = np.array([list[0]-list[-1] for list in log_bias_list])
+init_pred_error = np.array([arr[0] for arr in log_bias_list])
 final_pred_error = np.array([arr[-1] for arr in log_bias_list])
 
-i_best_net = np.where(final_pred_error == final_pred_error.min())[0]#np.where(pred_error_change == pred_error_change.max())[0]
+init_residual = np.array([arr[0] for arr in residual_list])
+final_residual = np.array([arr[-1] for arr in residual_list])
+
+i_best_net = np.where(final_pred_error == final_pred_error.min())[0] #np.where(pred_error_change == pred_error_change.max())[0]
 x_ori_best = x_ori_list[i_best_net].flatten()
 x_optim_best = x_optim_list[i_best_net].flatten()
+
+p_arr_ori = np.array([i*j for i, j in zip(x_ori_best[max_links:].reshape(2, -1), [1, 2])]).sum(0)
+p_arr_optim = np.array([i*j for i, j in zip(x_optim_best[max_links:].reshape(2, -1), [1, 2])]).sum(0)
 
 met_pred_before = metabolome_pred_before_list[i_best_net][0].astype(np.float64)
 met_pred_after = metabolome_pred_after_list[i_best_net][0].astype(np.float64)
@@ -138,23 +156,30 @@ met_meas_after = metabolome_meas_after_list[i_best_net][0].astype(np.float64)
 i_before = valid_index_before_list[i_best_net][0].astype(bool)
 i_after = valid_index_after_list[i_best_net][0].astype(bool)
 
-c_before = np.where(i_before, 'b', 'k')
-c_after = np.where(i_after, 'b', 'k')
-a_before = np.where(i_before, 1, 0.25)
-a_after = np.where(i_after, 1, 0.25)
+c_before = np.where(p_arr_ori == 1, 'tab:blue', np.where(p_arr_ori == 2, 'tab:green', 'tab:red'))#np.where(i_before, 'b', 'k')
+c_before = np.where(i_before, c_before, 'tab:gray')
+c_after = np.where(p_arr_ori == 1, 'tab:blue', np.where(p_arr_ori == 2, 'tab:green', 'tab:red'))#np.where(i_before, 'b', 'k')
+c_after = np.where(i_after, c_after, 'tab:gray')
+
+a_before = np.where(i_before, 0.8, 0.25)
+a_after = np.where(i_after, 0.8, 0.25)
 
 fig, ax = plt.subplots(1, 2, sharey=True, figsize=(7, 4))
-ax[0].scatter(np.log10(met_pred_before), np.log10(met_meas_before), c=c_before, alpha=a_before, s=30)
+ax[0].scatter(np.log10(met_pred_before), np.log10(met_meas_before), c=c_before, alpha=a_before, s=50)
 # ax[0].scatter(np.log10(metabolome_pred_old+1e-7), np.log10(metabolome_measured_old+1e-7), c='k', s=9)
 ax[0].axline((-2, -2), (3, 3), c='k')
 ax[0].set_title('Original network')
+ax[0].text(0.05, 0.8, r'$\chi_{excess}=$'+f'{init_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax[0].transAxes)
 # ax[0].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
 ax[0].set_ylabel(r'$log_{10}\ Empirical\ data$')
+ax[0].text(0.05, 0.9, f'RMSE = {init_pred_error[i_best_net][0].round(decimals=3):.2f}', transform=ax[0].transAxes)
 
-ax[1].scatter(np.log10(met_pred_after), np.log10(met_meas_after), c=c_after, alpha=a_after, s=30)
+ax[1].scatter(np.log10(met_pred_after), np.log10(met_meas_after), c=c_after, alpha=a_after, s=50)
 # ax[1].scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=9)
 ax[1].axline((-2, -2), (2, 2), c='k')
 ax[1].set_title('Optimised network')
+ax[1].text(0.05, 0.9, f'RMSE = {final_pred_error[i_best_net][0].round(decimals=3):.2f}', transform=ax[1].transAxes)
+ax[1].text(0.05, 0.8, r'$\chi_{excess}=$'+f'{final_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax[1].transAxes)
 # ax[1].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
 # ax[1].set_ylabel(r'$log_{10}\ Empirical\ data$')
 # ax[1].set_xlabel('', labelpad=0.1)
@@ -264,7 +289,7 @@ net_consumption_init = [[]]
 net_consumption_final = [[]]
 rmse_init = [[]]
 rmse_final = [[]]
-param_values = np.array([0., 0.01])
+param_values = np.array([0.1, 0.5])
 
 for p in param_values:
 
@@ -277,7 +302,7 @@ for p in param_values:
     init_error_arr = []
     final_error_arr = []
     for cl in sublinear_cell_lines:
-        pickle_path = '../raw-output/2-celltypes/optim-net/'+cl
+        pickle_path = '../raw-output/2-celltypes/optim-net/balance-partition/'+cl
 
         [x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list,
                     metabolome_pred_before_list, metabolome_meas_before_list,
@@ -346,7 +371,7 @@ for p in param_values:
     ax.tick_params(axis='x', labelrotation=70, labelsize=12)
     ax.set_title('Reward = '+str(p)+'; Penalty = '+str(p))
     f.tight_layout()
-    f.savefig('../figures/2-celltypes/optim-net/reward-'+str(p)+'-penalty-'+str(p)+'-change-in-net-consumption.png', dpi=300)
+    # f.savefig('../figures/2-celltypes/optim-net/reward-'+str(p)+'-penalty-'+str(p)+'-change-in-net-consumption.png', dpi=300)
     plt.close(f)
 
 combined_df_long = con_df_long.copy()
@@ -364,7 +389,7 @@ ax = sns.boxplot(data=diff_df, x='Cell line', y='RMSE',
                  hue='Param', palette='viridis', fliersize=0)
 ax.tick_params(axis='x', labelrotation=70, labelsize=12.5)
 ax.legend(title='Reward/Penalty',ncols=4)
-f.savefig('../figures/2-celltypes/optim-net/rmse-vs-reward-penalty.png', dpi=300)
+# f.savefig('../figures/2-celltypes/optim-net/rmse-vs-reward-penalty.png', dpi=300)
 
 f, ax = plt.subplots(1, 1, figsize=(15, 4))
 ax = sns.boxplot(data=diff_df, x='Cell line', y='NumPred',
@@ -372,7 +397,7 @@ ax = sns.boxplot(data=diff_df, x='Cell line', y='NumPred',
 ax.tick_params(axis='x', labelrotation=70, labelsize=12.5)
 ax.set_ylabel('# metabolites predicted')
 ax.legend(title='Reward/Penalty',ncols=4)
-f.savefig('../figures/2-celltypes/optim-net/numpred-vs-reward-penalty.png', dpi=300)
+# f.savefig('../figures/2-celltypes/optim-net/numpred-vs-reward-penalty.png', dpi=300)
 
 for p in param_values:
     fig, ax = plt.subplots(2, 1, sharex=True, figsize=(17, 6))
@@ -393,7 +418,7 @@ for p in param_values:
 
     fig.suptitle('Vector components; reward, penalty = '+str(p), fontsize=20)
     fig.tight_layout()
-    fig.savefig('../figures/2-celltypes/optim-net/reward-'+str(p)+'-penalty-'+str(p)+'-vector-components.png', dpi=300)
+    # fig.savefig('../figures/2-celltypes/optim-net/reward-'+str(p)+'-penalty-'+str(p)+'-vector-components.png', dpi=300)
 
 
 

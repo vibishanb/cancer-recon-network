@@ -22,8 +22,9 @@ from multiprocessing import Pool
 
 import os
 import numpy.matlib
-import all_plots
+# import all_plots
 from tqdm import tqdm
+
 # %%
 ############ Figure size settings
 SMALL_SIZE = 12
@@ -158,8 +159,10 @@ def calc_pred_error(ct_hyp, net, f, diet, ec_real, in_degree_flag, MAX_ID_metabo
 
     m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_hyp, diet, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
     
-    i_nonzero = np.where((ec_pred * ec_real) > 0)[0]
-    diff = np.log10(ec_pred[i_nonzero]) - np.log10(ec_real[i_nonzero]) # / np.log10(ec_real[i_nonzero])
+    i_nonzero = np.where((ec_pred * ec_real) > 0, True, False)
+    i_filt = np.where((b2m.sum(0) > 0), True, False)
+    i_final = i_nonzero * i_filt
+    diff = np.log10(ec_pred[i_final]) - np.log10(ec_real[i_final]) # / np.log10(ec_real[i_nonzero])
     pred_error = np.sqrt(np.mean(diff**2)) #np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
     
     return pred_error
@@ -197,38 +200,114 @@ def run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degr
     ### Correlation between predicted and expected metabolome
     ec_corr = pearsonr(np.log10(metabolome_pred), np.log10(metabolome_measured))[0]
     ### Bias in metabolome calculated for all non-trivial predictions
-    bias_metabolome = np.log10(metabolome_pred) - np.log10(metabolome_measured)
+    bias_metabolome = np.zeros_like(metabolome_pred_unfilt)
+    bias_metabolome[i_final] = np.log10(metabolome_pred) - np.log10(metabolome_measured)
     ### Mean squared error in metabolome prediction only for all non-trivial predictions
     # diff = np.log10(metabolome_pred) - np.log10(metabolome_measured)
-    mean_error = np.sqrt(np.mean(bias_metabolome**2))
+    mean_error = np.sqrt(np.mean(bias_metabolome[i_final]**2))
 
     n_predicted = len(metabolome_pred)
 
     return [ec_corr, ct_final, mean_error, metabolome_pred_unfilt, metabolome_measured_unfilt, i_final, bias_metabolome, n_predicted]#, slope_filt, intercept_filt
 
-def generate_random_network(net, bias_metabolome):
-    rnet = net.copy()
-    # n_unused = (rnet.iloc[:, -1] == 0).sum() # Number of unused metabolites
-    # n_edges = rnet.shape[0]
-    i_consumption_edges = np.where(bias_metabolome > 0)[0]
-    i_production_edges = np.where(bias_metabolome < 0)[0]
+def generate_random_network(rnet, ec_real):
+    # rnet = net.copy()
+    # # n_unused = (rnet.iloc[:, -1] == 0).sum() # Number of unused metabolites
+    # # n_edges = rnet.shape[0]
+    # i_consumption_edges = np.where(bias_metabolome > 0)[0]
+    # i_production_edges = np.where(bias_metabolome < 0)[0]
 
-    con_edges = np.random.choice([0, 2], len(i_consumption_edges), replace=True)
-    pro_edges = np.random.choice([0, 3], len(i_production_edges), replace=True)
-    rnet.iloc[i_consumption_edges, -1] = con_edges.copy()
-    rnet.iloc[i_production_edges, -1] = pro_edges.copy()
+    # con_edges = np.random.choice([0, 2], len(i_consumption_edges), replace=True)
+    # pro_edges = np.random.choice([0, 3], len(i_production_edges), replace=True)
+    # rnet.iloc[i_consumption_edges, -1] = con_edges.copy()
+    # rnet.iloc[i_production_edges, -1] = pro_edges.copy()
 
-    if MAX_ID_celltypes > 1:    
-        assigned_edges = rnet.iloc[:len(bias_metabolome), -1].values
-        shuffled_edges = np.repeat(assigned_edges, MAX_ID_celltypes-1)
-        shuffled_edges = np.random.permutation(shuffled_edges)
+    # if MAX_ID_celltypes > 1:    
+    #     assigned_edges = rnet.iloc[:len(bias_metabolome), -1].values
+    #     shuffled_edges = np.repeat(assigned_edges, MAX_ID_celltypes-1)
+    #     shuffled_edges = np.random.permutation(shuffled_edges)
         
-        rnet.iloc[len(bias_metabolome):, -1] = shuffled_edges.copy()
+    #     rnet.iloc[len(bias_metabolome):, -1] = shuffled_edges.copy()
+        ## Production edges with partitioning
+
+    quantiles = np.quantile(ec_real, np.linspace(0, 1, MAX_ID_celltypes+1)[1:-1])
+    prod_celltypes = np.zeros_like(ec_real)
+    for i in range(MAX_ID_celltypes-1):
+        prod_celltypes = np.where(ec_real <= quantiles[i], prod_celltypes, prod_celltypes+1)
+    prod_celltypes = np.int64(prod_celltypes + 1)
+
+    # i_production = np.where(bias_metabolome < 0)[0]
+    for i in range(1, MAX_ID_celltypes+1):
+        # i_production = np.where(bias_metabolome < 0, True, False)
+        i_ct_prod = np.where(prod_celltypes == i, True, False)
+        n_pro = np.random.randint(1, np.max([i_ct_prod.sum(), 2]))
+        i_final = np.random.choice(np.where(i_ct_prod)[0], n_pro, replace=True)
+        pro_edges = np.random.choice([0, 3], len(i_final), replace=True)
+
+        # i_consumption_edges = np.where(bias_metabolome > 0)[0]
+        # con_edges = np.random.choice([0, 2], len(i_consumption_edges), replace=True)
+        
+        ct_index = np.where(rnet.iloc[:, 0]==i)[0]
+        rnet.iloc[ct_index[i_final], -1] = pro_edges.copy()
+        # rnet.iloc[ct_index[i_consumption_edges], -1] = con_edges.copy()
+    
+    pro_mets_final = rnet.iloc[np.where(rnet.iloc[:, -1]==3)[0], 2].values
+    for i in range(1, MAX_ID_celltypes+1):
+        ct_index = np.where(rnet.iloc[:, 0]==i)[0]
+        n_con = np.random.randint(1, np.max([len(pro_mets_final), 2]))
+        con_mets = np.random.choice(pro_mets_final, n_con, replace=True)
+        i_con_edges = np.where(np.isin(rnet.iloc[ct_index, 2].values, con_mets))[0]
+        rnet.iloc[ct_index[i_con_edges], -1] = np.where(rnet.iloc[ct_index[i_con_edges], -1] == 3, 5, 2)
+    
+    # con_mets_final = rnet.iloc[np.where(rnet.iloc[:, -1]==2)[0], 2].values
+    # prod_mets_final = np.where(rnet.iloc[:, -1]==3)[0]
+    # for i in prod_mets_final:
+    #     if np.isin(rnet.iloc[i, 2], con_mets_final):
+    #         continue
+    #     else:
+    #         rnet.iloc[i, -1] = 0
 
     return rnet
 
+def generate_balance_part_network(net, bias_metabolome, ec_real):
+    rnet = net.copy()
+    rnet.iloc[:, -1] = 0
+    # n_unused = (rnet.iloc[:, -1] == 0).sum() # Number of unused metabolites
+    # n_edges = rnet.shape[0]
+
+    rnet = generate_random_network(rnet, ec_real)
+    balance = np.zeros(MAX_ID_celltypes)
+    for i in range(1, MAX_ID_celltypes+1):
+        net_temp = rnet[rnet['celltypes_ID']==i]
+        i_consumed = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [2, 5]))[0]
+        i_produced = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [3, 5]))[0]
+        net_consumption = diet.values[i_consumed].sum()
+        net_production = ec_real[i_produced].sum()
+        balance[i-1] = net_production/net_consumption
+
+    ## Balance calculation
+    # b_low = 0.1
+    # b_high = 1
+    count = 0
+    while (count <= 100) * (balance != 1).any():#((balance < b_low) + (balance > b_high)).any():
+        balance_flag = False
+        rnet = generate_random_network(rnet, ec_real)
+        for i in range(1, MAX_ID_celltypes+1):
+            net_temp = rnet[rnet['celltypes_ID']==i]
+            i_consumed = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [2, 5]))[0]
+            i_produced = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [3, 5]))[0]
+            net_consumption = diet.values[i_consumed].sum()
+            net_production = ec_real[i_produced].sum()
+            balance[i-1] = net_production/net_consumption
+        count += 1
+
+    if count < 100: #((balance >= b_low) * (balance <= b_high)).all():
+        balance_flag = True
+
+    return rnet, balance_flag
+
 ####### Error function for GutCP-based algorithm
-def pred_error_addingLinks(n_pred_init, x, net_ori, f, col_name, diet, in_degree_flag, cellnum_init, cellnum_max, pred_params):
+def pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, col_name, diet, in_degree_flag, cellnum_init, cellnum_max, pred_params):
     '''
     pred_error_addingLinks is a function used to compute the rms error between experimentally measured
     metagenome and predicted metagenome computed from the model for a certain nutrient intake. It relies on 
@@ -239,6 +318,7 @@ def pred_error_addingLinks(n_pred_init, x, net_ori, f, col_name, diet, in_degree
     '''
 
     max_links = MAX_ID_celltypes * MAX_ID_metabolites # maximal number of links = number of celltypes * number of metabolites
+    ec_real = ec_metabolome.loc[:, col_name].values
 
     ######## Convert x to net structure (convert the adjacency matrix into the edge list):
     ### consumption links:
@@ -256,30 +336,102 @@ def pred_error_addingLinks(n_pred_init, x, net_ori, f, col_name, diet, in_degree
     b = net_ori.iloc[max_links:, 1].values
     c = np.where(x_production, 3, 0)
     net_added_production = pd.DataFrame({net_ori.columns[0]: a,
-                                          net_ori.columns[1]: b,
-                                          net_ori.columns[2]: c})
+                                         net_ori.columns[1]: b,
+                                         net_ori.columns[2]: c})
 
     net = pd.concat([net_added_consumption, net_added_production])
     n_changed = len(np.where(net.iloc[:, -1].values != net_ori.iloc[:, -1].values)[0])
 
+    ## RMSE calculation for all celltypes
     ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_pred_new = run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+
+    ## Collapse into a single celltype and calculate RMSE for that
+    ## This is being done by taking all the consumption and production links across celltypes and assigning them to the first celltype, while keeping the other celltypes as dummy placeholders. This makes it easier to calculate the RMSE for the combined network in place without having to reassign MAX_ID_celltypes and other celltype number-specific function arguments.
+    net_consumption = net.iloc[:max_links, :].groupby('metabolites').sum().clip(0, 2).reset_index()
+    net_consumption.loc[:, 'celltypes'] = 0
+    net_ref = net_consumption.copy()
+    for i in range(1, MAX_ID_celltypes):
+        net_dummy = net_ref.copy()
+        net_dummy.iloc[:, -1] = 0
+        net_dummy.loc[:, 'celltypes'] = i
+        net_consumption = pd.concat([net_consumption, net_dummy])
+
+    net_production = net.iloc[max_links:, :].groupby('metabolites').sum().clip(0, 3).reset_index()
+    net_production.loc[:, 'celltypes'] = 0
+    net_ref = net_production.copy()
+    for i in range(1, MAX_ID_celltypes):
+        net_dummy = net_ref.copy()
+        net_dummy.iloc[:, -1] = 0
+        net_dummy.loc[:, 'celltypes'] = i
+        net_production = pd.concat([net_production, net_dummy])
+
+    net_combined = pd.concat([net_consumption, net_production])
+    ct_final = np.concatenate([[cellnum_max], np.zeros(MAX_ID_celltypes-1)]).flatten() # Assumed final celltype distribution reflecting a single celltype
+    m2b_combined, b2m_combined, metabolome_pred_combined = calculate_metabolome_from_net(f, ct_final, diet, net_combined, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    i_nonzero = np.where((metabolome_pred_combined * ec_real) > 0, True, False)
+    i_filt = np.where((b2m_combined.sum(0) > 0), True, False)
+    i_final = i_nonzero * i_filt
+    diff = np.log10(metabolome_pred_combined[i_final]) - np.log10(ec_real[i_final])
+    mean_error_combined = np.sqrt(np.mean(diff**2))
+
+
+    ## Balance calculation
+    # b_low = 0.1
+    # b_high = 1
+    balance = np.zeros(MAX_ID_celltypes)
+    # n_inter = 0
+    # n_non_inter = 0
+    for i in range(MAX_ID_celltypes):
+        net_temp = net[net['celltypes']==i]
+        i_consumed = np.where(net_temp.iloc[:MAX_ID_metabolites, -1]==2)[0]
+        i_produced = np.where(net_temp.iloc[MAX_ID_metabolites:, -1]==3)[0]
+        net_consumption = diet.values[i_consumed].sum()
+        net_production = ec_real[i_produced].sum()
+        balance[i] = net_production/net_consumption
+
+        # ## Strict interconversion
+        # n_tot = len(i_consumed) + len(i_produced)
+        # n_inter += np.intersect1d(i_consumed, i_produced).shape[0]#np.isin(i_produced, i_consumed).sum()
+        # n_non_inter += n_tot - n_inter #(~np.isin(i_produced, i_consumed)).sum()
+
+    residual_new = np.abs(balance - 1).sum() # This residual term will be zero when the balance lies within the (0.1, 1) range for all celltypes
+    
+    # # ## Strict interconversion
+    # # n_inter = np.isin(i_produced, i_consumed).sum()
+    # # n_non_inter = (~np.isin(i_produced, i_consumed)).sum()
+    # inter_diff = n_inter - n_inter_old
+    # non_inter_diff = n_non_inter - n_non_inter_old
+    residual_diff = residual_new - residual_init
 
     penalty_param = pred_params['penalty']
     reward_param = pred_params['reward']
-    pred_errorTotal = mean_error - np.where(n_pred_new > n_pred_init, reward_param, -penalty_param)
+    pred_errorTotal = mean_error - np.where(n_pred_new > n_pred_init, reward_param, -penalty_param) #+ np.where(residual_new != 0, penalty_param * np.log10(np.abs(residual_new)), 0) #np.where(residual_init > residual_new, penalty_param, -reward_param) #- (inter_diff*reward_param) + (non_inter_diff*penalty_param)
+    # + (penalty_param * n_non_inter) - (reward_param * n_inter)
     
-    return [pred_errorTotal, metabolome_pred, metabolome_measured, i_final, bias_metabolome, mean_error, n_pred_new]
+    return [pred_errorTotal, metabolome_pred, metabolome_measured, i_final, bias_metabolome, mean_error, mean_error_combined, n_pred_new, residual_new]
 
-def calculate_priors(bias_metabolome):
-        # Prior probability is simply a rescaled value of the bias for each metabolite; cell type frequency not included here because there is no reference "measured" value unlike the metabolite levels
+def calculate_priors(bias_metabolome, prod_celltypes):
+    # Prior probability is simply a rescaled value of the bias for each metabolite; cell type frequency not included here because there is no reference "measured" value unlike the metabolite levels
+    # In a later modification of this calculation where production partitioning is hard-coded into the model, we do not want production links to be dropped or added at random. Instead, we want resampling and learning on the production side to also be within the partitioned regime. So the prior probabilities for each celltype's production are only assigned to those metabolites that are in that celltype's production range.
+    prior_temp = np.exp(np.abs(bias_metabolome))/np.exp(np.abs(bias_metabolome)).sum(0)
+
+    ## Consumption priors are random and same for all celltypes
     consumption_prior, production_prior = np.zeros(MAX_ID_metabolites), np.zeros(MAX_ID_metabolites)
     i_con_prior = np.where(bias_metabolome > 0)[0]
-    i_pro_prior = np.where(bias_metabolome < 0)[0]
-    prior_temp = np.exp(np.abs(bias_metabolome))/np.exp(np.abs(bias_metabolome)).sum(0)
     consumption_prior[i_con_prior] = prior_temp[i_con_prior]
-    production_prior[i_pro_prior] = prior_temp[i_pro_prior]
-    consumption_prior = np.repeat(consumption_prior, MAX_ID_celltypes)
-    production_prior = np.repeat(production_prior, MAX_ID_celltypes)
+    consumption_prior = np.concatenate([consumption_prior]*MAX_ID_celltypes)
+
+    # ## Production priors without partitioning
+    # i_pro_prior = np.where(bias_metabolome < 0)[0]
+    # production_prior[i_pro_prior] = prior_temp[i_pro_prior]
+    # production_prior = np.repeat(production_prior, MAX_ID_celltypes)
+
+    ## Production priors with partitioning
+    prod_prior_temp = []
+    for i in range(MAX_ID_celltypes):
+        prod_prior_temp.append(np.where(prod_celltypes == i+1, prior_temp, 0))
+    production_prior = np.array(prod_prior_temp).ravel()
+
     prior_prob = np.concatenate([consumption_prior, production_prior]) # Appending the same array twice, first for consumption links and then for production links i.e., prior probability for a given metabolite depends on the error in prediction but is the same for consumption and production links
     max_links = MAX_ID_celltypes * MAX_ID_metabolites 
     prior_prob += 1/max_links # All links have some constant probability to be chosen at random, independent of the bias in the metabolome prediction
@@ -305,10 +457,12 @@ def run_network_optimisation(all_params):
     celltypeID_list = []
     prior_list = []
     log_bias_list = []
+    log_bias_combined_list = []
     metabolome_pred_list = []
     metabolome_measured_list = []
     valid_index_list = []
     n_pred_list = []
+    residual_list = []
 
     ct0 = cellnum_init*celltypefreq.to_numpy()
 
@@ -321,7 +475,7 @@ def run_network_optimisation(all_params):
     b2m_ori = (b2m!=0).astype(int).copy()
     x_ori = np.concatenate([m2b_ori.flatten(), b2m_ori.flatten()]) # This is the adjacency matrix
     # fun = lambda x: pred_error_addingLinks(x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final)
-    ##### How many metabolites predicted non-trivialling in the initial network
+    ##### How many metabolites predicted non-trivially in the initial network
     metabolome_measured = ec_metabolome.loc[:, cl].values
     i_nonzero = np.where(met_pred * metabolome_measured, True, False)
     i_filt = np.where((b2m.sum(0) > 0), True, False)
@@ -332,26 +486,54 @@ def run_network_optimisation(all_params):
     max_links = m2b.shape[0]*m2b.shape[1]
     pred_params = {'penalty': all_params[10], 'reward': all_params[11]}
 
-    error_before, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_met_bias_init, n_pred = pred_error_addingLinks(n_pred_init, x_ori, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params)
+    ## Balance calculation
+    balance = np.zeros(MAX_ID_celltypes)
+    for i in range(MAX_ID_celltypes):
+        net_temp = net_ori[net_ori['celltypes']==i]
+        i_consumed = np.where(net_temp.iloc[:MAX_ID_metabolites, -1]==2)[0]
+        i_produced = np.where(net_temp.iloc[MAX_ID_metabolites:, -1]==3)[0]
+        net_consumption = diet.values[i_consumed].sum()
+        net_production = metabolome_measured[i_produced].sum()
+        balance[i] = net_production/net_consumption
+
+        # ## Strict interconversion
+        # n_tot = len(i_consumed) + len(i_produced)
+        # n_inter += np.intersect1d(i_consumed, i_produced).shape[0]#np.isin(i_produced, i_consumed).sum()
+        # n_non_inter += n_tot - n_inter #(~np.isin(i_produced, i_consumed)).sum()
+
+    residual_init = np.abs(balance - 1).sum() # This residual term will be zero when the balance becomes 1 for all celltypes
+
+    error_before, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias_init, log_bias_combined_init, n_pred, residual_init = pred_error_addingLinks(n_pred_init, residual_init, x_ori, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params)
     metabolome_pred_list.append(metabolome_pred)
     metabolome_measured_list.append(metabolome_measured)
     valid_index_list.append(i_final)
+    log_bias_list.append(log_bias_init)
+    log_bias_combined_list.append(log_bias_combined_init)
     n_pred_list.append(n_pred)
+    residual_list.append(residual_init)
     # n_pred_before = len(np.where(metabolome_pred_before > 0)[0])
     bias_metabolome_ori = bias_metabolome.copy()
-    prior_prob = calculate_priors(bias_metabolome_ori)
+
+    ## Partitioning of the metabolome based on number of celltypes assumed; The array prod_celltype is a vector that codes which celltype is assumed to produce each metabolite under partition.
+    quantiles = np.quantile(metabolome_measured, np.linspace(0, 1, MAX_ID_celltypes+1)[1:-1])
+    prod_celltypes = np.zeros_like(metabolome_measured)
+    for i in range(MAX_ID_celltypes-1):
+        prod_celltypes = np.where(metabolome_measured <= quantiles[i], prod_celltypes, prod_celltypes+1)
+    prod_celltypes = np.int64(prod_celltypes + 1)
+
+    prior_prob = calculate_priors(bias_metabolome_ori, prod_celltypes)
     # print('The original error is', error_before)
     error_list.append(error_before)
     x = x_ori.copy()
 
     # Network optimisation begins here
     kT = all_params[9]
-    Twindow = 500
+    Twindow = 750
     numStepsNotAdded = 0
     numAdditions = 0
     numDeletions = 0
     error_window = []
-    for i in range(10000):
+    for i in range(30000):
 
         error_window.append(error_before)
         if np.random.uniform(0,1,1)[0] <= 0.5: # Each step chooses randomly between adding a new link or removing an existing link
@@ -363,8 +545,8 @@ def run_network_optimisation(all_params):
         else:
             continue
 
-        error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, n_pred = pred_error_addingLinks(n_pred_init, x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
-        prior_prob = calculate_priors(bias_metabolome)
+        error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, log_bias_combined, n_pred, residual_after = pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
+        prior_prob = calculate_priors(bias_metabolome, prod_celltypes)
 
         if (n_pred >= 3) * (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
             error_before = error_after
@@ -379,11 +561,14 @@ def run_network_optimisation(all_params):
             pos_x_list.append(i_x) # Record every link whose status has changed in the adjacency matrix
             prior_list.append(prior_prob[i_x])
             log_bias_list.append(log_bias)
+            log_bias_combined_list.append(log_bias_combined)
             metabolome_pred_list.append(metabolome_pred)
             metabolome_measured_list.append(metabolome_measured)
             valid_index_list.append(i_final)
             n_pred_list.append(n_pred)
+            residual_list.append(residual_after)
             n_pred_init = n_pred
+            residual_init = residual_after.copy()
 
             if i_x < max_links:
                 row_num = i_x // m2b_ori.shape[1]
@@ -396,15 +581,16 @@ def run_network_optimisation(all_params):
             celltypeID_list.append(col_num)
             numStepsNotAdded = 0
         else:  ## not accepted   
-            x[i_x] = x_ori[i_x] # Maintain the original state
+            x[i_x] = x_ori[i_x].copy() # Maintain the original state
             numStepsNotAdded += 1
             n_pred_init = n_pred
+            residual_init = residual_after.copy()
 
         if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow)*kT)):
             break
     # n_pred_after = len(np.where(metabolome_pred_list[-1] > 0)[0])
     
-    return [kT, pred_params['penalty'], pred_params['reward'], f, x_ori, x, error_list, n_pred_list, metabolome_pred_list, metabolome_measured_list, valid_index_list, log_bias_list]#, consumption_added, production_added, consumption_deleted, production_deleted]
+    return [kT, pred_params['penalty'], pred_params['reward'], f, x_ori, x, error_list, n_pred_list, residual_list, metabolome_pred_list, metabolome_measured_list, valid_index_list, log_bias_list, log_bias_combined_list]#, consumption_added, production_added, consumption_deleted, production_deleted]
 
 def plot_networks(net, df_summary, which_net, n_reps, fig_path, figsave_flag):
     # net_plot = net_optim.copy()
@@ -841,8 +1027,8 @@ plt.savefig(fig_path + '/sensitivity-penalty-cross-reward-npred.png', dpi=300)
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-for n_ct in tqdm(range(2, 5), desc='n_ct'):
-    home_dir = os.getcwd()
+for n_ct in tqdm(range(2, 3), desc='n_ct'):
+    home_dir = os.getcwd() #+ '/codes'
     # n_ct = 1
     all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
     # i_selfish = 0
@@ -888,17 +1074,18 @@ for n_ct in tqdm(range(2, 5), desc='n_ct'):
     MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
 
     cell_line_names = ec_metabolome.columns.to_numpy()
-    for i_cell_line in tqdm(range(len(cell_line_names)), desc='Cell lines', leave=False):
+    for i_cell_line in tqdm(range(len(cell_line_names[:1])), desc='Cell lines'):
         # i_cell_line = np.where(cell_line_names == 'A549-ATCC')[0][0]
         cl = cell_line_names[i_cell_line]
         f = 0.5
+        ec_real = ec_metabolome.loc[:, cl].values
 
         cellnum_init = cellnum_init_all[i_cell_line]
         cellnum_final = cellnum_final_all[i_cell_line]
         bias = np.log10(ec_metabolome.iloc[:, i_cell_line].values + 1e-6) - np.log10(diet.values + 1e-6)
 
-        reward_arr = np.array([0.1, 0.5])
-        penalty_arr = np.array([0.1, 0.5])
+        reward_arr = np.array([0.1])
+        penalty_arr = np.array([0.1])
 
         in_degree_flag = False
 
@@ -907,6 +1094,7 @@ for n_ct in tqdm(range(2, 5), desc='n_ct'):
             x_ori_list = [[]]
             error_list_all_reps = [[]]
             log_bias_list = [[]]
+            log_bias_combined_list = [[]]
             metabolome_pred_before_list = [[]]
             metabolome_meas_before_list = [[]]
             metabolome_pred_after_list = [[]]
@@ -914,23 +1102,31 @@ for n_ct in tqdm(range(2, 5), desc='n_ct'):
             valid_index_before_list = [[]]
             valid_index_after_list = [[]]
             n_pred_list = [[]]
+            residual_list = [[]]
+            balance_flag_list = []
 
-            n_reps = 100
+            n_reps = 20
             for i in np.arange(n_reps):
-                net_raw = generate_random_network(all_networks[i_cell_line], bias)
+                # net_raw = generate_random_network(all_networks[i_cell_line], bias)
+                net_raw_balanced, balance_flag = generate_balance_part_network(all_networks[i_cell_line], bias, ec_real)
+                balance_flag_list.append(balance_flag)
+
+                net_ori, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net_raw_balanced)
                 all_params = np.array([f, cl,
                         cellnum_init, cellnum_final,
-                        net_raw, diet, in_degree_flag,
+                        net_raw_balanced, diet, in_degree_flag,
                         MAX_ID_metabolites, MAX_ID_celltypes,
                         0.003, penalty_arr[k], reward_arr[k]], dtype=object)
 
-                kT, penalty, reward, f, x_ori, x, elist, n_pred, met_pred_list, met_measured_list, i_list, log_bias = run_network_optimisation(all_params)
+                kT, penalty, reward, f, x_ori, x, elist, n_pred, residual, met_pred_list, met_measured_list, i_list, bias, bias_combined = run_network_optimisation(all_params)
 
                 x_ori_list.append(x_ori)
                 x_optim_list.append(x)
                 error_list_all_reps.append(elist)
-                log_bias_list.append(log_bias)
+                log_bias_list.append(bias)
+                log_bias_combined_list.append(bias_combined)
                 n_pred_list.append(n_pred)
+                residual_list.append(residual)
                 metabolome_pred_before_list.append(met_pred_list[0])
                 metabolome_pred_after_list.append(met_pred_list[-1])
                 metabolome_meas_before_list.append(met_measured_list[0])
@@ -947,7 +1143,9 @@ for n_ct in tqdm(range(2, 5), desc='n_ct'):
             x_optim_list = np.array(x_optim_list[1:])
             error_plot_list = np.array(error_list_all_reps[1:], dtype=object)
             log_bias_list = np.array(log_bias_list[1:], dtype=object)
+            log_bias_combined_list = np.array(log_bias_combined_list[1:], dtype=object)
             n_pred_list = np.array(n_pred_list[1:], dtype=object)
+            residual_list = np.array(residual_list[1:], dtype=object)
             metabolome_pred_before_list = np.array(metabolome_pred_before_list[1:], dtype=object)
             metabolome_pred_after_list = np.array(metabolome_pred_after_list[1:], dtype=object)
             metabolome_meas_before_list = np.array(metabolome_meas_before_list[1:], dtype=object)
@@ -955,7 +1153,7 @@ for n_ct in tqdm(range(2, 5), desc='n_ct'):
             valid_index_before_list = np.array(valid_index_before_list[1:], dtype=object)
             valid_index_after_list = np.array(valid_index_after_list[1:], dtype=object)
 
-            net_state = 'optim-net/'
+            net_state = 'optim-net/balance-partition/'
             pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/'+net_state+cl
             try:
                 os.makedirs(pickle_path)
@@ -964,7 +1162,7 @@ for n_ct in tqdm(range(2, 5), desc='n_ct'):
 
             pickle_out = open(pickle_path + "/reward-"+str(all_params[-1])+"-penalty-"+str(all_params[-2])+"-optimised_network_output.pickle", "wb")
             #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
-            pickle.dump([x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list,
+            pickle.dump([x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list, residual_list, balance_flag_list,
                         metabolome_pred_before_list, metabolome_meas_before_list,
                         metabolome_pred_after_list, metabolome_meas_after_list,
                         valid_index_before_list, valid_index_after_list], pickle_out, protocol=2)
@@ -973,7 +1171,7 @@ for n_ct in tqdm(range(2, 5), desc='n_ct'):
 # %%
 ##### Visualising output
 net_state = 'optim-net/'
-figsave_flag = True
+figsave_flag = False
 fig_path = '../figures/'+str(k)+'-celltypes/'+net_state+cl
 try:
     os.makedirs(fig_path)
@@ -982,7 +1180,7 @@ except:
 
 ##### I'm calling this the general summary, whatever that means
 # f, ax = plt.subplots(2, 2, figsize=(8, 5))
-fig = plt.figure(figsize=(9, 5))
+fig = plt.figure(figsize=(10, 6))
 gs = GridSpec(2, 2, figure=fig)
 ax1 = fig.add_subplot(gs[:, 0])
 ax2 = fig.add_subplot(gs[0, 1])
@@ -995,14 +1193,28 @@ ax1.set_xlabel("Add/remove steps")
 ax1.set_ylabel("RMSE")
 ax1.set_title("%d replicate runs" % n_reps)
 
-#### How many steps of add/remove on average
-sim_length = np.zeros(n_reps)
-for i in range(n_reps):
-    sim_length[i] = len(error_plot_list[i])
-sns.histplot(sim_length, fill=True, element='step', 
-             stat='density', alpha=0.25, bins=10, kde=True, ax=ax2)
-ax2.set_xlabel('# steps')
-ax2.set_title("Step number distribution")
+# #### How many steps of add/remove on average
+# sim_length = np.zeros(n_reps)
+# for i in range(n_reps):
+#     sim_length[i] = len(error_plot_list[i])
+# sns.histplot(sim_length, fill=True, element='step', 
+#              stat='density', alpha=0.25, bins=10, kde=True, ax=ax2)
+# ax2.set_xlabel('# steps')
+# ax2.set_title("Step number distribution")
+#### Pairwise comparison of combined vs uncombined network predictions
+final_error = np.array([arr[-1] for arr in log_bias_list])
+final_error_combined = np.array([arr[-1] for arr in log_bias_combined_list])
+df = pd.DataFrame({'N_CT': np.concatenate([np.ones_like(final_error), np.ones_like(final_error)+1]),
+                    'Replicate': np.concatenate([np.arange(1, 1+n_reps), np.arange(1, 1+n_reps)]),
+                    'RMSE': np.concatenate([final_error_combined, final_error])})
+sns.lineplot(data=df, x='N_CT', y='RMSE',
+            units='Replicate', size=7, color='b',
+            dashes=False, estimator=None, ax=ax2)
+sns.scatterplot(data=df, x='N_CT', y='RMSE', size=30, color='b',
+                edgecolor='face', alpha=0.8, ax=ax2)
+ax2.set_xlabel(r'$N_{CT}$')
+ax2.set(xlim=(0.5, 2.5), xticks=[1, 2])
+ax2.get_legend().remove()
 
 #### More non-trivially predicted metabolites means more error?
 num_pred = np.array([arr[-1] for arr in n_pred_list])
@@ -1038,7 +1250,11 @@ if figsave_flag:
 # %%
 ##### Check out the best performing network
 pred_error_change = np.array([list[0]-list[-1] for list in log_bias_list])
+init_pred_error = np.array([arr[0] for arr in log_bias_list])
 final_pred_error = np.array([arr[-1] for arr in log_bias_list])
+
+init_residual = np.array([arr[0] for arr in residual_list])
+final_residual = np.array([arr[-1] for arr in residual_list])
 
 i_best_net = np.where(final_pred_error == final_pred_error.min())[0]#np.where(pred_error_change == pred_error_change.max())[0]
 x_ori_best = x_ori_list[i_best_net].flatten()
@@ -1052,11 +1268,12 @@ met_meas_after = metabolome_meas_after_list[i_best_net][0].astype(np.float64)
 
 i_before = valid_index_before_list[i_best_net][0].astype(bool)
 i_after = valid_index_after_list[i_best_net][0].astype(bool)
+
 # %%
 ######## Convert x to net structure (convert the adjacency matrix into the edge list)
 
 max_links = MAX_ID_metabolites * MAX_ID_celltypes # maximal number of links = number of specis * number of metabolites
-net_temp, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net_raw)
+net_temp, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net_raw_balanced)
 
 ######## Original network
 x_consumption = x_ori_best[:max_links]
@@ -1099,14 +1316,15 @@ net_optim = pd.concat([net_added_consumption, net_added_production])
 
 # %%
 ######### Change in error with additions and deletions
-# f = 0.5#f_arr[0]
-# ec_corr_old, ct_full_old, mean_error_old, metabolome_pred_old, metabolome_measured_old = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_ori, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+f = 0.5#f_arr[0]
+ec_corr_old, ct_full_old, mean_error_old, metabolome_pred_old, metabolome_measured_old, i_final_old, bias_metabolome_old, n_predicted_old = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_ori, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
-# ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_optim, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_predicted = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_optim, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
-# print('Metabolome deviation with old network is: ', mean_error_old)
-# print('Metabolome deviation with improved network is: ', mean_error)
-# print('------------------------------------------------------------------------')
+print('Metabolome deviation with old network is: ', mean_error_old)
+print('Metabolome deviation with improved network is: ', mean_error)
+print('------------------------------------------------------------------------')
+
 c_before = np.where(i_before, 'b', 'k')
 c_after = np.where(i_after, 'b', 'k')
 a_before = np.where(i_before, 1, 0.25)
@@ -1117,6 +1335,8 @@ ax[0].scatter(np.log10(met_pred_before), np.log10(met_meas_before), c=c_before, 
 # ax[0].scatter(np.log10(metabolome_pred_old+1e-7), np.log10(metabolome_measured_old+1e-7), c='k', s=9)
 ax[0].axline((-2, -2), (3, 3), c='k')
 ax[0].set_title('Old network')
+ax[0].text(0.05, 0.9, f'RMSE = {init_pred_error[i_best_net][0].round(decimals=3):.2f}', transform=ax[0].transAxes)
+# ax[0].text(0.05, 0.8, r'$\chi_{excess}=$'+f'{init_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax[0].transAxes)
 # ax[0].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
 ax[0].set_ylabel(r'$log_{10}\ Empirical\ data$')
 
@@ -1124,6 +1344,8 @@ ax[1].scatter(np.log10(met_pred_after), np.log10(met_meas_after), c=c_after, alp
 # ax[1].scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=9)
 ax[1].axline((-2, -2), (2, 2), c='k')
 ax[1].set_title('New network')
+ax[1].text(0.05, 0.9, f'RMSE = {final_pred_error[i_best_net][0].round(decimals=3):.2f}', transform=ax[1].transAxes)
+# ax[1].text(0.05, 0.8, r'$\chi_{excess}=$'+f'{final_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax[1].transAxes)
 # ax[1].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
 # ax[1].set_ylabel(r'$log_{10}\ Empirical\ data$')
 fig.supxlabel(r'$log_{10}\ Predicted\ metabolome$')
@@ -1135,7 +1357,7 @@ if figsave_flag:
 else:
     plt.show()
 # plt.scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=4)
-    
+
     
 # %%
 df_summary = pd.concat([df_con_links, df_pro_links])

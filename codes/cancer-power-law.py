@@ -14,9 +14,24 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import forestplot as fp
 
-from scipy.stats import linregress, t
+from scipy.stats import linregress, t, ttest_ind_from_stats
 import os
+import itertools
 sns.set_context('notebook')
+
+SMALL_SIZE = 15
+MEDIUM_SIZE = 17
+BIGGER_SIZE = 19
+
+plt.rc('font', size=SMALL_SIZE, family='sans-serif', serif='Arial')          # controls default text sizes
+plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+plt.rc('text')
+
 # %%
 ###### Importing actual metabolome data
 ec_metabolome_all = pd.read_excel('../input-data/jain-data/metabolome-jain.xlsx', sheet_name='ec_metabolites')
@@ -51,7 +66,7 @@ try:
     os.makedirs(fig_path)
 except:
     pass
-figsave_flag = True
+figsave_flag = False
 
 for cl in ec_metabolome.columns.values:
     ec_measured = ec_metabolome.loc[:, cl]
@@ -92,8 +107,8 @@ for cl in ec_metabolome.columns.values:
     if figsave_flag:
         fig.savefig(fig_path+'diet-scatter-'+cl+'.png', dpi=300, bbox_inches='tight')
         plt.close(fig)
-    else:
-        fig.show()
+    # else:
+    #     fig.show()
 
 slopes = np.array(slopes)
 slopes_err = np.array(slopes_err)
@@ -102,7 +117,7 @@ rmse_fitted = np.array(rmse_fitted)
 rmse_ref = np.array(rmse_ref)
 
 # %%
-figsave_flag = True
+figsave_flag = False
 slope_df = pd.DataFrame({'Cell line': ec_metabolome.columns.values, 'Slope': slopes,
                          'SE': slopes_err, 'CI': slopes_ci,
                          'Smin': slopes - slopes_ci, 'Smax': slopes + slopes_ci,
@@ -147,7 +162,7 @@ ax = fp.forestplot(slope_df,  # the dataframe with results data
               sort=True, sortby='SortbyCol',
               figsize=(4, 16))
 ax.axvline(x=1, ymax=0.96, c='r', linestyle='dashed', linewidth=2)
-plt.savefig(fig_path+'slopes-forest-plot.png', bbox_inches='tight', dpi=300)
+# plt.savefig(fig_path+'slopes-forest-plot.png', bbox_inches='tight', dpi=300)
 
 ax = fp.forestplot(slope_df,  # the dataframe with results data
               estimate="Del_RMSE",  # col containing estimated effect size 
@@ -160,7 +175,7 @@ ax = fp.forestplot(slope_df,  # the dataframe with results data
               sort=True, sortby='SortbyCol',
               xticks=[-0.1, -0.075, -0.05, -0.025, 0, 0.025],
               figsize=(5, 15))
-plt.savefig(fig_path+'del-rmse-forest-plot.png', bbox_inches='tight', dpi=300)
+# plt.savefig(fig_path+'del-rmse-forest-plot.png', bbox_inches='tight', dpi=300)
 
 # %%
 i_sublinear = np.where(slope_df.loc[:, 'Smax'] < 1)[0]
@@ -176,4 +191,57 @@ pickle_out = open("cancer_power_law_stats.pickle","wb")
 #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
 pickle.dump([slope_df, sublinear_cell_lines], pickle_out, protocol=2)
 pickle_out.close()
+
+# %%
+## Distribution of variance in ec_metabolome across cell lines
+log_metabolome = np.log10(ec_metabolome.where(ec_metabolome > 0).dropna())
+pairwise_distances = [[]]
+for cl in log_metabolome.columns:
+    df = log_metabolome.copy()
+    df.insert(0, cl, df.pop(cl))
+    log_diff = df.diff(axis=1).iloc[:, 1:]
+    pairwise_distances.append(np.sqrt((log_diff**2).sum(0)).values)
+
+    
+pairwise_distances = np.array(pairwise_distances[1:])
+norm_distance = np.array([arr/arr.mean() for arr in pairwise_distances])*100
+mean_distance = np.array([arr.mean() for arr in pairwise_distances])
+
+mean_df = pd.DataFrame({'CellLineType': np.where(np.isin(np.arange(len(mean_distance)), i_sublinear), 'Sublinear', 'Linear'),
+                        'MeanDist': mean_distance,
+                        'FracDist': mean_distance/mean_distance.mean()})
+
+# %%
+f, ax = plt.subplots(2, 1, sharey=False, figsize=(13, 7))
+index = np.where(~np.isin(log_metabolome.columns, sublinear_cell_lines))[0]
+g1 = sns.violinplot(data=norm_distance[index].T, color='tab:gray', ax=ax[0])
+g1.set_xticklabels(log_metabolome.columns[index], fontsize=12)
+g1.tick_params(axis='x', labelrotation=60)
+g1.set_title('Linear', fontsize=17)
+
+# f, ax = plt.subplots(1, 1, sharey=True, figsize=(15, 7))
+g2 = sns.violinplot(data=norm_distance[i_sublinear].T, color='tab:green', ax=ax[1])
+g2.set_xticklabels(sublinear_cell_lines, fontsize=12)
+g2.tick_params(axis='x', labelrotation=60)
+g2.set_title('Sublinear', fontsize=17)
+
+f.supxlabel(r'Cell line', fontsize=17)
+f.supylabel(r'$\%$ metabolome difference', fontsize=17)
+f.tight_layout()
+f.show()
+
+# f.tight_layout()
+# %%
+a = mean_distance[index]
+b = mean_distance[i_sublinear]
+print(ttest_ind_from_stats(a.mean(), a.std(), len(a),
+                     b.mean(), b.std(), len(b),
+                     alternative='two-sided'))
+
+
+h = sns.violinplot(data=mean_df, x='CellLineType', y='MeanDist',
+               palette={'Sublinear': 'tab:green', 'Linear': 'tab:gray'})
+# h.tick_params(axis='both', size=12)
+h.set_ylabel('Mean Euclidean distance')
+h.set_xlabel('Cell line type')
 # %%
