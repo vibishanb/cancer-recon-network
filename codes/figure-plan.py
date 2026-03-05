@@ -114,9 +114,10 @@ ax3.spines.bottom.set_bounds(num_pred.min(), num_pred.max())
 log_residual_list = [np.log10(np.array(arr) + 1e-5) for arr in residual_list]
 for i in range(n_reps):
     sns.lineplot(residual_list[i], ax=ax4, linewidth=2.5)
+ax4.set_yscale('log')
 # ax4.fill_between(x=ax4.get_xlim(), y1=0, y2=-1,
 #                  alpha=0.4, color='tab:green', lw=2, ls='--')
-ax4.set_ylabel(r"$\chi_{excess}$")
+ax4.set_ylabel(r"$log_{10} \chi_{excess}$")
 ax4.set_xlabel('Add/remove steps')
 
 fig.suptitle('Reward = '+str(reward)+'; Penalty = '+str(penalty))
@@ -158,7 +159,8 @@ i_after = valid_index_after_list[i_best_net][0].astype(bool)
 
 c_before = np.where(p_arr_ori == 1, 'tab:blue', np.where(p_arr_ori == 2, 'tab:green', 'tab:red'))#np.where(i_before, 'b', 'k')
 c_before = np.where(i_before, c_before, 'tab:gray')
-c_after = np.where(p_arr_ori == 1, 'tab:blue', np.where(p_arr_ori == 2, 'tab:green', 'tab:red'))#np.where(i_before, 'b', 'k')
+
+c_after = np.where(p_arr_optim == 1, 'tab:blue', np.where(p_arr_optim == 2, 'tab:green', 'tab:red'))#np.where(i_before, 'b', 'k')
 c_after = np.where(i_after, c_after, 'tab:gray')
 
 a_before = np.where(i_before, 0.8, 0.25)
