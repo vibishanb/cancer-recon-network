@@ -451,10 +451,10 @@ def run_network_optimisation(all_params):
     MAX_ID_celltypes = all_params[8]
     
     error_list = []
-    current_step_list = []
-    pos_x_list = []
-    metID_list = []
-    celltypeID_list = []
+    # current_step_list = []
+    # pos_x_list = []
+    # metID_list = []
+    # celltypeID_list = []
     prior_list = []
     log_bias_list = []
     log_bias_combined_list = []
@@ -529,13 +529,14 @@ def run_network_optimisation(all_params):
     # Network optimisation begins here
     kT = all_params[9]
     Twindow = 750
-    numStepsNotAdded = 0
-    numAdditions = 0
-    numDeletions = 0
+    # numStepsNotAdded = 0
+    # numAdditions = 0
+    # numDeletions = 0
     error_window = []
     for i in range(30000):
 
         error_window.append(error_before)
+        x_previous = x.copy()
         if np.random.uniform(0,1,1)[0] <= 0.5: # Each step chooses randomly between adding a new link or removing an existing link
             i_x = np.random.choice(np.where(x==0)[0], 1, p=prior_prob[x==0]/prior_prob[x==0].sum())[0] # New link is chosen based on the prior probability-smaller bias in prediction leads to smaller prior prob
             x[i_x] = 1
@@ -550,15 +551,15 @@ def run_network_optimisation(all_params):
 
         if (n_pred >= 3) * (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
             error_before = error_after
-            if x[i_x] == 1:
-                # print('Addition accepted, error is ', error_before)
-                numAdditions += 1
-            else:
-                # print('Deletion accepted, error is ', error_before)
-                numDeletions += 1 
+            # if x[i_x] == 1:
+            #     # print('Addition accepted, error is ', error_before)
+            #     numAdditions += 1
+            # else:
+            #     # print('Deletion accepted, error is ', error_before)
+            #     numDeletions += 1 
             error_list.append(error_before)
-            current_step_list.append(i)
-            pos_x_list.append(i_x) # Record every link whose status has changed in the adjacency matrix
+            # current_step_list.append(i)
+            # pos_x_list.append(i_x) # Record every link whose status has changed in the adjacency matrix
             prior_list.append(prior_prob[i_x])
             log_bias_list.append(log_bias)
             log_bias_combined_list.append(log_bias_combined)
@@ -569,28 +570,57 @@ def run_network_optimisation(all_params):
             residual_list.append(residual_after)
             n_pred_init = n_pred
             residual_init = residual_after.copy()
+            # x_previous = x.copy()
 
-            if i_x < max_links:
-                row_num = i_x // m2b_ori.shape[1]
-                col_num = i_x - row_num * m2b_ori.shape[1]
-            elif i_x >= max_links:
-                i_x = i_x - m2b_ori.shape[0] * m2b_ori.shape[1]
-                row_num = i_x // b2m_ori.shape[1]
-                col_num = i_x - row_num * b2m_ori.shape[1]
-            metID_list.append(row_num)
-            celltypeID_list.append(col_num)
-            numStepsNotAdded = 0
+            # if i_x < max_links:
+            #     row_num = i_x // m2b_ori.shape[1]
+            #     col_num = i_x - row_num * m2b_ori.shape[1]
+            # elif i_x >= max_links:
+            #     i_x = i_x - m2b_ori.shape[0] * m2b_ori.shape[1]
+            #     row_num = i_x // b2m_ori.shape[1]
+            #     col_num = i_x - row_num * b2m_ori.shape[1]
+            # metID_list.append(row_num)
+            # celltypeID_list.append(col_num)
+            # numStepsNotAdded = 0
         else:  ## not accepted   
-            x[i_x] = x_ori[i_x].copy() # Maintain the original state
-            numStepsNotAdded += 1
+            x[i_x] = x_previous[i_x] # Maintain the previous state
+            # numStepsNotAdded += 1
             n_pred_init = n_pred
             residual_init = residual_after.copy()
+            # x_previous = x.copy()
 
         if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow)*kT)):
             break
     # n_pred_after = len(np.where(metabolome_pred_list[-1] > 0)[0])
     
     return [kT, pred_params['penalty'], pred_params['reward'], f, x_ori, x, error_list, n_pred_list, residual_list, metabolome_pred_list, metabolome_measured_list, valid_index_list, log_bias_list, log_bias_combined_list]#, consumption_added, production_added, consumption_deleted, production_deleted]
+
+def net_from_x(x, MAX_ID_metabolites, MAX_ID_celltypes):
+
+    max_links = MAX_ID_celltypes * MAX_ID_metabolites # maximal number of links = number of celltypes * number of metabolites
+
+    ######## Convert x to net structure (convert the adjacency matrix into the edge list):
+    ### consumption links:
+    x_consumption = x[:max_links]
+    x_production = x[max_links:]
+
+    a = np.repeat(np.arange(MAX_ID_metabolites)[np.newaxis, :], MAX_ID_celltypes, axis=0).ravel() #net_ori.iloc[:max_links, 0].values
+    b = np.repeat(np.arange(MAX_ID_celltypes), MAX_ID_metabolites) #net_ori.iloc[:max_links, 1].values
+    c = np.where(x_consumption, 2, 0)
+    net_added_consumption = pd.DataFrame({'metabolites': a,
+                                          'celltypes': b,
+                                          'edgeType': c})
+    
+    # a = net_ori.iloc[max_links:, 0].values
+    # b = net_ori.iloc[max_links:, 1].values
+    c = np.where(x_production, 3, 0)
+    net_added_production = pd.DataFrame({'metabolites': a,
+                                          'celltypes': b,
+                                          'edgeType': c})
+
+    net = pd.concat([net_added_consumption, net_added_production])
+
+    return net
 
 def plot_networks(net, df_summary, which_net, n_reps, fig_path, figsave_flag):
     # net_plot = net_optim.copy()
@@ -1181,7 +1211,7 @@ except:
 
 ##### I'm calling this the general summary, whatever that means
 # f, ax = plt.subplots(2, 2, figsize=(8, 5))
-fig = plt.figure(figsize=(10, 6))
+fig = plt.figure(figsize=(9.5, 6))
 gs = GridSpec(2, 2, figure=fig)
 ax1 = fig.add_subplot(gs[:, 0])
 ax2 = fig.add_subplot(gs[0, 1])
@@ -1213,14 +1243,13 @@ df = pd.DataFrame({'N_CT': np.concatenate([np.ones_like(final_error), np.ones_li
 sns.lineplot(data=df, x='N_CT', y='RMSE',
             units='Replicate',
             hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
-            dashes=False, estimator=None, ax=ax2)
+            dashes=False, estimator=None, ax=ax2, legend=True)
 sns.scatterplot(data=df, x='N_CT', y='RMSE',
                 hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
-                edgecolor='face', alpha=0.9, ax=ax2)
+                edgecolor='face', alpha=0.9, ax=ax2, legend=False)
 ax2.set_xlabel(r'$N_{CT}$')
 ax2.set(xlim=(0.5, 2.5), xticks=[1, 2])
-
-ax2.get_legend().remove()
+# ax2.get_legend().remove()
 
 #### More non-trivially predicted metabolites means more error?
 num_pred = np.array([arr[-1] for arr in n_pred_list])
@@ -1229,6 +1258,7 @@ sns.regplot(x=num_pred, y=final_error, color='k', ax = ax3,
             line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
 rsq, pval = spearmanr(num_pred, final_error)
 ax3.text(0.05, 0.9, f'rho = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax3.transAxes)
+ax3.xaxis.set_major_locator(MaxNLocator(integer=True))
 # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
 ax3.set_xlabel('# metabolites predicted')
 ax3.set_ylabel('Final RMSE')
@@ -1250,6 +1280,7 @@ fig.suptitle(f'Network optimisation for {cl} with reward {reward_arr[0]}')
 fig.tight_layout()
 if figsave_flag:
     fig.savefig(fig_path+'/with-balance-all-replicates-summary.png', dpi=300)
+    print("Figure saved at "+fig_path)
     plt.close(fig)
 
 
@@ -1263,8 +1294,6 @@ init_residual = np.array([arr[0] for arr in residual_list])
 final_residual = np.array([arr[-1] for arr in residual_list])
 
 i_best_net = np.where(final_pred_error == final_pred_error.min())[0]#np.where(pred_error_change == pred_error_change.max())[0]
-x_ori_best = x_ori_list[i_best_net].flatten()
-x_optim_best = x_optim_list[i_best_net].flatten()
 
 met_pred_before = metabolome_pred_before_list[i_best_net][0].astype(np.float64)
 met_pred_after = metabolome_pred_after_list[i_best_net][0].astype(np.float64)
@@ -1275,51 +1304,13 @@ met_meas_after = metabolome_meas_after_list[i_best_net][0].astype(np.float64)
 i_before = valid_index_before_list[i_best_net][0].astype(bool)
 i_after = valid_index_after_list[i_best_net][0].astype(bool)
 
-# %%
 ######## Convert x to net structure (convert the adjacency matrix into the edge list)
 
-max_links = MAX_ID_metabolites * MAX_ID_celltypes # maximal number of links = number of specis * number of metabolites
-# net_temp, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net_raw_balanced)
-net_temp = all_networks[0].copy()
+x_ori_best = x_ori_list[i_best_net].flatten()
+x_optim_best = x_optim_list[i_best_net].flatten()
 
-######## Original network
-x_consumption = x_ori_best[:max_links]
-x_production = x_ori_best[max_links:]
-
-a = net_temp.iloc[:max_links, 0].values
-b = net_temp.iloc[:max_links, 1].values
-c = np.where(x_consumption, 2, 0)
-net_added_consumption = pd.DataFrame({net_temp.columns[0]: a,
-                                        net_temp.columns[1]: b,
-                                        net_temp.columns[2]: c})
-
-a = net_temp.iloc[max_links:, 0].values
-b = net_temp.iloc[max_links:, 1].values
-c = np.where(x_production, 3, 0)
-net_added_production = pd.DataFrame({net_temp.columns[0]: a,
-                                        net_temp.columns[1]: b,
-                                        net_temp.columns[2]: c})
-net_ori = pd.concat([net_added_consumption, net_added_production])
-
-####### Optimised network
-x_consumption = x_optim_best[:max_links]
-x_production = x_optim_best[max_links:]
-
-a = net_temp.iloc[:max_links, 0].values
-b = net_temp.iloc[:max_links, 1].values
-c = np.where(x_consumption, 2, 0)
-net_added_consumption = pd.DataFrame({net_temp.columns[0]: a,
-                                        net_temp.columns[1]: b,
-                                        net_temp.columns[2]: c})
-
-a = net_temp.iloc[max_links:, 0].values
-b = net_temp.iloc[max_links:, 1].values
-c = np.where(x_production, 3, 0)
-net_added_production = pd.DataFrame({net_temp.columns[0]: a,
-                                        net_temp.columns[1]: b,
-                                        net_temp.columns[2]: c})
-net_optim = pd.concat([net_added_consumption, net_added_production])
-
+net_ori = net_from_x(x_ori_best, MAX_ID_metabolites, MAX_ID_celltypes)
+net_optim = net_from_x(x_optim_best, MAX_ID_metabolites, MAX_ID_celltypes)
 
 # %%
 ######### Change in error with additions and deletions
@@ -1332,10 +1323,19 @@ print('Metabolome deviation with old network is: ', mean_error_old)
 print('Metabolome deviation with improved network is: ', mean_error)
 print('------------------------------------------------------------------------')
 
-c_before = np.where(i_before, 'b', 'k')
-c_after = np.where(i_after, 'b', 'k')
-a_before = np.where(i_before, 1, 0.25)
-a_after = np.where(i_after, 1, 0.25)
+max_links = MAX_ID_metabolites * MAX_ID_celltypes
+p_arr_ori = np.array([i*j for i, j in zip(x_ori_best[max_links:].reshape(2, -1), [1, 2])]).sum(0)
+p_arr_optim = np.array([i*j for i, j in zip(x_optim_best[max_links:].reshape(2, -1), [1, 2])]).sum(0)
+
+c_before = np.where(p_arr_ori == 0, 'tab:gray', 
+                    np.where(p_arr_ori == 1, 'tab:blue', 
+                             np.where(p_arr_ori == 2, 'tab:green', 'tab:red')))
+c_after = np.where(p_arr_optim == 0, 'tab:gray', 
+                   np.where(p_arr_optim == 1, 'tab:blue', 
+                            np.where(p_arr_optim == 2, 'tab:green', 'tab:red')))
+
+a_before = np.where(i_before, 0.8, 0.25)
+a_after = np.where(i_after, 0.8, 0.25)
 
 fig, ax = plt.subplots(1, 2, sharey=True, figsize=(7, 4))
 ax[0].scatter(np.log10(met_pred_before), np.log10(met_meas_before), c=c_before, alpha=a_before, s=30)
@@ -1360,6 +1360,7 @@ plt.tight_layout()
 
 if figsave_flag:
     fig.savefig(fig_path+'/with-balance-prediction-comparison-reward-'+str(reward_arr[0])+'.png', dpi=300)
+    print("Figure saved at "+fig_path)
     plt.close(fig)
 else:
     plt.show()
