@@ -405,7 +405,7 @@ def pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, col_name, 
 
     penalty_param = pred_params['penalty']
     reward_param = pred_params['reward']
-    pred_errorTotal = mean_error - np.where(n_pred_new > n_pred_init, reward_param, -penalty_param) + np.where(residual_new != 0, penalty_param * np.log10(residual_new), 0) #np.where(residual_init > residual_new, penalty_param, -reward_param) #- (inter_diff*reward_param) + (non_inter_diff*penalty_param)
+    pred_errorTotal = mean_error - np.where(n_pred_new > n_pred_init, reward_param, -penalty_param) #+ np.where(residual_new != 0, penalty_param * np.log10(residual_new), 0) #np.where(residual_init > residual_new, penalty_param, -reward_param) #- (inter_diff*reward_param) + (non_inter_diff*penalty_param)
     # + (penalty_param * n_non_inter) - (reward_param * n_inter)
     
     return [pred_errorTotal, metabolome_pred, metabolome_measured, i_final, bias_metabolome, mean_error, mean_error_combined, n_pred_new, residual_new]
@@ -1172,7 +1172,7 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
 # %%
 ##### Visualising output
 net_state = 'optim-net/'
-figsave_flag = False
+figsave_flag = True
 fig_path = '../figures/2-celltypes/'+net_state+cl
 try:
     os.makedirs(fig_path)
@@ -1219,7 +1219,8 @@ sns.scatterplot(data=df, x='N_CT', y='RMSE',
                 edgecolor='face', alpha=0.9, ax=ax2)
 ax2.set_xlabel(r'$N_{CT}$')
 ax2.set(xlim=(0.5, 2.5), xticks=[1, 2])
-# ax2.get_legend().remove()
+
+ax2.get_legend().remove()
 
 #### More non-trivially predicted metabolites means more error?
 num_pred = np.array([arr[-1] for arr in n_pred_list])

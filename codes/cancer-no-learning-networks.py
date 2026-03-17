@@ -531,7 +531,7 @@ pickle_out.close()
 
 # %%
 net_state = 'no-learn-balanced-net/'
-figsave_flag = False
+figsave_flag = True
 fig_path = '../figures/2-celltypes/'+net_state+ec_metabolome.columns[0]
 try:
     os.makedirs(fig_path)
