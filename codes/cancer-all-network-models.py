@@ -1193,7 +1193,7 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
 
             pickle_out = open(pickle_path + "/reward-"+str(all_params[-1])+"-penalty-"+str(all_params[-2])+"-optimised_network_output.pickle", "wb")
             #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
-            pickle.dump([x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list, residual_list, balance_flag_list,
+            pickle.dump([x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, n_pred_list, residual_list, balance_flag_list,
                         metabolome_pred_before_list, metabolome_meas_before_list,
                         metabolome_pred_after_list, metabolome_meas_after_list,
                         valid_index_before_list, valid_index_after_list], pickle_out, protocol=2)
@@ -1225,14 +1225,7 @@ ax1.set_xlabel("Add/remove steps")
 ax1.set_ylabel("RMSE")
 ax1.set_title("%d replicate runs" % n_reps)
 
-# #### How many steps of add/remove on average
-# sim_length = np.zeros(n_reps)
-# for i in range(n_reps):
-#     sim_length[i] = len(error_plot_list[i])
-# sns.histplot(sim_length, fill=True, element='step', 
-#              stat='density', alpha=0.25, bins=10, kde=True, ax=ax2)
-# ax2.set_xlabel('# steps')
-# ax2.set_title("Step number distribution")
+
 #### Pairwise comparison of combined vs uncombined network predictions
 final_error = np.array([arr[-1] for arr in log_bias_list])
 final_error_combined = np.array([arr[-1] for arr in log_bias_combined_list])

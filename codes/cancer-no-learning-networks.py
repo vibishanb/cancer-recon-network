@@ -555,7 +555,7 @@ g.set_xlabel(r'$N_{CT}$')
 g.set(xlim=(0.5, 2.5), xticks=[1, 2])
 g.get_legend().remove()
 if figsave_flag:
-    g.figure.savefig(fig_path+'/balance-pairwise-comparison.png', dpi=300)
+    g.figure.savefig(fig_path+'/balance-pairwise-comparison-npro-'+str(npro)+'.png', dpi=300)
     plt.close(g.figure)
 else:
     plt.show()
@@ -566,112 +566,118 @@ h.set_xlabel('Balance state')
 h.set(xlim=(-0.75, 1.75), xticks=[0, 1], xticklabels=['False', 'True'])
 h.get_legend().set_title(r'$N_{CT}$')
 if figsave_flag:
-    h.figure.savefig(fig_path+'/balance-comparison-boxplot.png', dpi=300)
+    h.figure.savefig(fig_path+'/balance-comparison-boxplot-npro-'+str(npro)+'.png', dpi=300)
     plt.close(h.figure)
 else:
     plt.show()
 
-p = sns.scatterplot(x=balance_arr_1ct, y=rmse_arr_1ct,
-                alpha=0.8, edgecolor='face')
-# p.set_xscale('log')
-p.set(xlabel=r'$\chi_{production}$', ylabel='RMSE', title=r'$N_{CT} = 1$')
-plt.show()
+# p = sns.scatterplot(x=balance_arr_1ct, y=rmse_arr_1ct,
+#                 alpha=0.8, edgecolor='face')
+# # p.set_xscale('log')
+# p.set(xlabel=r'$\chi_{production}$', ylabel='RMSE', title=r'$N_{CT} = 1$')
+# plt.show()
 
-prod_df = pd.DataFrame({'Xpro_CT1': balance_arr_2ct[:, 0],
-                        'Xpro_CT2': balance_arr_2ct[:, 1],
-                        'RMSE': rmse_arr_2ct})
-q = sns.scatterplot(data=prod_df, x='Xpro_CT1', y='Xpro_CT2',
-                    hue = 'RMSE', palette='Blues_d',#sizes=(50, 200),
-            # hue='N_produced', palette='crest',
-            edgecolor= 'face', alpha = 0.9, s=75)
+
+# prod_df = pd.DataFrame({'Xpro_CT1': balance_arr_2ct[:, 0],
+#                         'Xpro_CT2': balance_arr_2ct[:, 1],
+#                         'RMSE': rmse_arr_2ct})
+# q = sns.scatterplot(data=prod_df, x='Xpro_CT1', y='Xpro_CT2',
+#                     hue = 'RMSE', palette='Blues_d',#sizes=(50, 200),
+#             # hue='N_produced', palette='crest',
+#             edgecolor= 'face', alpha = 0.9, s=75)
+# q.set_xscale('log')
+# q.set_yscale('log')
+# q.set_xlabel(r'$\chi_{production, CT1}$')
+# q.set_ylabel(r'$\chi_{production, CT2}$')
+# q.axhline(y=1, linestyle='dashed', c='tab:green')
+# # q.text(0.9, 0.38, r'$y=1$', c='tab:green', transform=g.transAxes)
+# q.axvline(x=1, linestyle='dashed', c='tab:green')
+# # q.text(0.68, 0.87, r'$x=1$', c='tab:green', rotation='vertical', transform=g.transAxes)
+
+prod_df = pd.DataFrame({'Celltype': np.array([np.ones_like(rmse_arr_2ct), np.ones_like(rmse_arr_2ct)+1]).ravel().astype(int),
+                   'X_pro': np.concatenate([balance_arr_2ct[:, 0], balance_arr_2ct[:, 1]]),
+                   'RMSE': np.concatenate([rmse_arr_2ct, rmse_arr_2ct])})
+
+
+q = sns.lineplot(data=prod_df, x='X_pro', y='RMSE',
+                    hue='Celltype', palette=['b', 'g'], lw=3)
 q.set_xscale('log')
-q.set_yscale('log')
-q.set_xlabel(r'$\chi_{production, CT1}$')
-q.set_ylabel(r'$\chi_{production, CT2}$')
-q.axhline(y=1, linestyle='dashed', c='tab:green')
-# q.text(0.9, 0.38, r'$y=1$', c='tab:green', transform=g.transAxes)
-q.axvline(x=1, linestyle='dashed', c='tab:green')
-# q.text(0.68, 0.87, r'$x=1$', c='tab:green', rotation='vertical', transform=g.transAxes)
+q.set_xlabel(r'$\chi_{production}$', fontsize=17)
+q.set_ylabel(r'RMSE')
+
+
 if figsave_flag:
-    q.figure.savefig(fig_path+'/balance-and-rmse-scatter.png', dpi=300)
+    q.figure.savefig(fig_path+'/balance-and-rmse-lineplot-npro-'+str(npro)+'.png', dpi=300)
     plt.close(q.figure)
 else:
     plt.show()
 
 # %%
-figsave_flag = False
+figsave_flag = True
 
-f, ax = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(5.5, 5.5))
+f, ax = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(7.5, 3.5))
 
 rmse_diff = rmse_arr_1ct - rmse_arr_2ct
 i_min_diff = np.where(rmse_diff == rmse_diff.min(), True, False)
 i_max_diff = np.where(rmse_diff == rmse_diff.max(), True, False)
 
 #### Minimum difference
-colors = np.where(production_ct_arr_1ct[i_min_diff]==1, 'tab:blue', 'tab:green')
+colors = np.where(production_ct_arr_1ct[i_min_diff]==1, 'b', 'g')
 labels = np.where(production_ct_arr_1ct[i_min_diff]==1, 'CT1', 'CT2')
-ax[0, 0].scatter(np.log10(ec_pred_arr_1ct[i_min_diff][index_arr_1ct[i_min_diff]]), 
+ax[0].scatter(np.log10(ec_pred_arr_1ct[i_min_diff][index_arr_1ct[i_min_diff]]), 
                 np.log10(ec_real[index_arr_1ct[i_min_diff][0]]),
             c=colors[index_arr_1ct[i_min_diff]],#'tab:blue',
             alpha=0.6, edgecolor='face')
-ax[0, 0].axline((-2, -2), (3, 3), c='k', ls='--')
-ax[0, 0].set_title(r'$N_{CT} = 1$')
-ax[0, 0].text(0.05, 0.9, f'RMSE = {rmse_arr_1ct[i_min_diff][0]:.2f}', transform=ax[0, 0].transAxes)
-ax[0, 0].text(0.05, 0.8, str(balance_arr_1ct[i_min_diff][0].round(decimals=2)), transform=ax[0, 0].transAxes)
+ax[0].axline((-2, -2), (3, 3), c='k', ls='--')
+ax[0].set_title(r'$N_{CT} = 1$')
+ax[0].text(0.05, 0.9, f'RMSE = {rmse_arr_1ct[i_min_diff][0]:.2f}', transform=ax[0].transAxes)
+ax[0].text(0.05, 0.8, str(balance_arr_1ct[i_min_diff][0].round(decimals=2)), transform=ax[0].transAxes)
 
-colors = np.where(production_ct_arr_2ct[i_min_diff]==1, 'tab:blue', 'tab:green')
+colors = np.where(production_ct_arr_2ct[i_min_diff]==1, 'b', 'g')
 labels = np.where(production_ct_arr_2ct[i_min_diff]==1, 'CT1', 'CT2')
 con_index_ct1 = np.where(consumption_ct_arr_2ct[i_min_diff]==1, True, False)[0]*index_arr_2ct[i_min_diff]
 con_index_ct2 = np.where(consumption_ct_arr_2ct[i_min_diff]==2, True, False)[0]*index_arr_2ct[i_min_diff]
-ax[0, 1].scatter(np.log10(ec_pred_arr_2ct[i_min_diff][con_index_ct1]), 
+ax[1].scatter(np.log10(ec_pred_arr_2ct[i_min_diff][con_index_ct1]), 
                 np.log10(ec_real[con_index_ct1[0]]),
             c=colors[con_index_ct1], marker='o',
             alpha=0.6, edgecolor='face')
-ax[0, 1].scatter(np.log10(ec_pred_arr_2ct[i_min_diff][con_index_ct2]), 
+ax[1].scatter(np.log10(ec_pred_arr_2ct[i_min_diff][con_index_ct2]), 
                 np.log10(ec_real[con_index_ct2[0]]),
             c=colors[con_index_ct2], marker='X',
             alpha=0.6, edgecolor='face')
-ax[0, 1].axline((-2, -2), (3, 3), c='k', ls='--')
-ax[0, 1].set_title(r'$N_{CT} = 2$')
-ax[0, 1].text(0.05, 0.9, f'RMSE = {rmse_arr_2ct[i_min_diff][0]:.2f}', transform=ax[0, 1].transAxes)
-ax[0, 1].text(0.05, 0.8, str(balance_arr_2ct[i_min_diff][0].round(decimals=2)), transform=ax[0, 1].transAxes)
-ax[0, 1].text(1.02, 0.45, 'Worst', transform=ax[0, 1].transAxes, rotation=270)
+ax[1].axline((-2, -2), (3, 3), c='k', ls='--')
+ax[1].set_title(r'Worst of $N_{CT} = 2$')
+ax[1].text(0.4, 0.9, f'RMSE = {rmse_arr_2ct[i_min_diff][0]:.2f}', transform=ax[1].transAxes)
+ax[1].text(0.4, 0.8, str(balance_arr_2ct[i_min_diff][0].round(decimals=2).tolist()), transform=ax[1].transAxes)
+# ax[0, 1].text(1.02, 0.45, 'Worst', transform=ax[0, 1].transAxes, rotation=270)
 
 #### Maximum difference
-colors = np.where(production_ct_arr_1ct[i_max_diff]==1, 'tab:blue', 'tab:green')
-labels = np.where(production_ct_arr_1ct[i_max_diff]==1, 'CT1', 'CT2')
-ax[1, 0].scatter(np.log10(ec_pred_arr_1ct[i_max_diff][index_arr_1ct[i_max_diff]]), 
-                np.log10(ec_real[index_arr_1ct[i_max_diff][0]]),
-            c=colors[index_arr_1ct[i_max_diff]],#'tab:blue',
-            alpha=0.6, edgecolor='face')
-ax[1, 0].axline((-2, -2), (3, 3), c='k', ls='--')
-ax[1, 0].text(0.05, 0.9, f'RMSE = {rmse_arr_1ct[i_max_diff][0]:.2f}', transform=ax[1, 0].transAxes)
-ax[1, 0].text(0.05, 0.8, str(balance_arr_1ct[i_max_diff][0].round(decimals=2)), transform=ax[1, 0].transAxes)
 
-colors = np.where(production_ct_arr_2ct[i_max_diff]==1, 'tab:blue', 'tab:green')
+colors = np.where(production_ct_arr_2ct[i_max_diff]==1, 'b', 'g')
 labels = np.where(production_ct_arr_2ct[i_max_diff]==1, 'CT1', 'CT2')
 con_index_ct1 = np.where(consumption_ct_arr_2ct[i_max_diff]==1, True, False)[0]*index_arr_2ct[i_max_diff]
 con_index_ct2 = np.where(consumption_ct_arr_2ct[i_max_diff]==2, True, False)[0]*index_arr_2ct[i_max_diff]
-ax[1, 1].scatter(np.log10(ec_pred_arr_2ct[i_max_diff][con_index_ct1]), 
+ax[2].scatter(np.log10(ec_pred_arr_2ct[i_max_diff][con_index_ct1]), 
                 np.log10(ec_real[con_index_ct1[0]]),
             c=colors[con_index_ct1], marker='o',
             alpha=0.6, edgecolor='face')
-ax[1, 1].scatter(np.log10(ec_pred_arr_2ct[i_max_diff][con_index_ct2]), 
+ax[2].scatter(np.log10(ec_pred_arr_2ct[i_max_diff][con_index_ct2]), 
                 np.log10(ec_real[con_index_ct2[0]]),
             c=colors[con_index_ct2], marker='X',
             alpha=0.6, edgecolor='face')
-ax[1, 1].axline((-2, -2), (3, 3), c='k', ls='--')
-ax[1, 1].text(0.05, 0.9, f'RMSE = {rmse_arr_2ct[i_max_diff][0]:.2f}', transform=ax[1, 1].transAxes)
-ax[1, 1].text(0.05, 0.8, str(balance_arr_2ct[i_max_diff][0].round(decimals=2)), transform=ax[1, 1].transAxes)
-ax[1, 1].text(1.02, 0.45, 'Best', transform=ax[1, 1].transAxes, rotation=270)
+ax[2].axline((-2, -2), (3, 3), c='k', ls='--')
+ax[2].text(0.4, 0.2, f'RMSE = {rmse_arr_2ct[i_max_diff][0]:.2f}', transform=ax[2].transAxes)
+ax[2].text(0.4, 0.1, str(balance_arr_2ct[i_max_diff][0].round(decimals=2).tolist()), transform=ax[2].transAxes)
+ax[2].set_title(r'Best of $N_{CT} = 2$')
+# ax[2].text(1.02, 0.45, 'Best', transform=ax[2].transAxes, rotation=270)
 
-f.supxlabel(r'$log_{10}\ Predicted\ metabolome$')
-f.supylabel(r'$log_{10}\ Empirical\ metabolome$')
-f.suptitle(r'$N_{produced} = $'+str(npro))
+f.supxlabel(r'$log_{10}\ Predicted\ metabolome$', fontsize=15)
+f.supylabel(r'$log_{10}\ Empirical\ metabolome$', fontsize=15)
+# f.suptitle(r'Random sampled networks; $N_{produced} = $'+str(npro))
 f.tight_layout()
 
 if figsave_flag:
-    f.figure.savefig(fig_path+'/metabolome-prediction-comparison.png', dpi=300)
+    f.figure.savefig(fig_path+'/metabolome-prediction-comparison-npro-'+str(npro)+'.png', dpi=300)
     plt.close(f.figure)
 else:
     plt.show()

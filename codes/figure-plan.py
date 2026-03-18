@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import pearsonr, spearmanr
 
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+from matplotlib.ticker import MaxNLocator
+
 import pickle
 import os
 
@@ -39,11 +41,12 @@ Figure 1 has been generated using a self-contained script called cancer-power-la
 # %%
 #### Figure 2: Single cell type model predictions-error reduction and number of metabolites predicted non-trivially
 #### Data import
-pickle_path = '../raw-output/2-celltypes/optim-net/balance-partition/A549-ATCC'
+cl='A549-ATCC'
+pickle_path = '../raw-output/2-celltypes/optim-net/balance-partition/'+cl
 reward = 0.1
 penalty = 0.1
 
-[x_ori_list, x_optim_list, error_plot_list, log_bias_list, n_pred_list, residual_list, balance_flag_list,
+[x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, n_pred_list, residual_list, balance_flag_list,
              metabolome_pred_before_list, metabolome_meas_before_list,
              metabolome_pred_after_list, metabolome_meas_after_list,
              valid_index_before_list, valid_index_after_list] = pd.read_pickle(pickle_path + '/reward-'+str(reward)+'-penalty-'+str(penalty)+'-optimised_network_output.pickle')
@@ -53,84 +56,74 @@ max_links = int(len(x_ori_list[0].flatten())/2)
 
 # %%
 ##### Figures in slides 3-6 of network-figure-plan.pptx
-fig = plt.figure(figsize=(17, 10))
-gs = GridSpec(1, 3, figure=fig)
-gs01 = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[:, :2])
-gs02 = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[:, 2])
-
-ax_left = gs01.subplots(sharex=True)
-ax1 = ax_left[0]#fig.add_subplot(ax_left[0])
-# ax2 = ax_left[1]#fig.add_subplot(ax_left[1])
-ax3 = fig.add_subplot(gs02[0])
-# ax4 = fig.add_subplot(gs02[1])
+fig = plt.figure(figsize=(10, 7))
+gs = GridSpec(2, 2, figure=fig)
+ax1 = fig.add_subplot(gs[:, 0])
+ax2 = fig.add_subplot(gs[0, 1])
+ax3 = fig.add_subplot(gs[1, 1])
 
 #### A quick glance of where sims have begun and ended
-hue_vector = np.arange(len(n_pred_list))
+colors = np.where(balance_flag_list, 'b', 'tab:red')
 for i in range(n_reps):
-    sns.lineplot(log_bias_list[i], ax=ax1, linewidth=2.5,)
-# ax1.set_xlabel("")
+    sns.lineplot(log_bias_list[i], ax=ax1, color=colors[i])
+ax1.set_xlabel("Add/remove steps")
 ax1.set_ylabel("RMSE")
 ax1.set_title("%d replicate runs" % n_reps)
-ax1.spines.top.set_visible(False)
-ax1.spines.right.set_visible(False)
-
-# #### Are more non-trivial predictions made on average during optimisation?
-# for i in range(n_reps):
-#     sns.lineplot(n_pred_list[i], ax=ax2, linewidth=2.5)
-# ax2.set_xlabel("Add/remove steps")
-# ax2.set_ylabel("# metabolites predicted")
-# # ax2.spines.top.set_visible(False)
-# # ax2.spines.right.set_visible(False)
 
 
-# # #### How many steps of add/remove on average
-# # sim_length = np.zeros(n_reps)
-# # for i in range(n_reps):
-# #     sim_length[i] = len(error_plot_list[i])
-# # sns.histplot(sim_length, fill=True, element='step', 
-# #              stat='proportion', alpha=0.25, bins=10, kde=True, ax=ax3)
-# # ax3.set_xlabel('# add/remove steps')
-# # # ax3.spines.top.set_visible(False)
-# # # ax3.spines.right.set_visible(False)
-# # # ax3.spines.left.set_visible(False)
-# # # ax3.set_title("Step number distribution")
+final_error = np.array([arr[-1] for arr in log_bias_list])
+final_error_combined = np.array([arr[-1] for arr in log_bias_combined_list])
+df = pd.DataFrame({'N_CT': np.concatenate([np.ones_like(final_error), np.ones_like(final_error)+1]).astype(int),
+                    'Replicate': np.concatenate([np.arange(1, 1+n_reps), np.arange(1, 1+n_reps)]),
+                    'Balance': np.concatenate([balance_flag_list, balance_flag_list]),
+                    'RMSE': np.concatenate([final_error_combined, final_error])})
+sns.lineplot(data=df, x='N_CT', y='RMSE',
+            units='Replicate',
+            hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
+            dashes=False, estimator=None, ax=ax2, legend=True)
+sns.scatterplot(data=df, x='N_CT', y='RMSE',
+                hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
+                edgecolor='face', alpha=0.9, ax=ax2, legend=False)
+ax2.set_xlabel(r'$N_{CT}$')
+ax2.set(xlim=(0.5, 2.5), xticks=[1, 2])
+# ax2.get_legend().remove()
 
 #### More non-trivially predicted metabolites means more error?
 num_pred = np.array([arr[-1] for arr in n_pred_list])
 final_error = np.array([arr[-1] for arr in log_bias_list])
 sns.regplot(x=num_pred, y=final_error, color='k', ax = ax3,
-            line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 25})
-rho, pval = spearmanr(num_pred, final_error)
-ax3.text(0.3, 0.05, f'Spearman\'s $\\rho$ = {rho:.2f}', transform=ax3.transAxes) #, p-value = {pval:.2f}
+            line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
+rsq, pval = spearmanr(num_pred, final_error)
+ax3.text(0.05, 0.9, f'rho = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax3.transAxes)
+ax3.xaxis.set_major_locator(MaxNLocator(integer=True))
 # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
 ax3.set_xlabel('# metabolites predicted')
 ax3.set_ylabel('Final RMSE')
-ax3.spines.top.set_visible(False)
-ax3.spines.right.set_visible(False)
-ax3.spines.left.set_bounds(final_error.min(), final_error.max())
-ax3.spines.bottom.set_bounds(num_pred.min(), num_pred.max())
 
-# #### Normalised residual production fraction-how does balance change during optimisation?
-# log_residual_list = [np.log10(np.array(arr) + 1e-5) for arr in residual_list]
 # for i in range(n_reps):
-#     sns.lineplot(residual_list[i], ax=ax4, linewidth=2.5)
-# ax4.set_yscale('log')
-# # ax4.fill_between(x=ax4.get_xlim(), y1=0, y2=-1,
-# #                  alpha=0.4, color='tab:green', lw=2, ls='--')
-# ax4.set_ylabel(r"$log_{10} \chi_{excess}$")
-# ax4.set_xlabel('Add/remove steps')
+#     sns.lineplot(log_bias_list[i], ax=ax[1, 1])
+# ax[1, 1].set_xlabel("Add/remove steps")
+# ax[1, 1].set_ylabel("Met_RMSE")
+# ax[1, 1].set_title("%d replicate runs" % n_reps)
+# sns.regplot(x=initial_error, y=sim_length, color='k', ax = ax[1, 1],
+#             line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
+# rsq, pval = pearsonr(initial_error, sim_length)
+# ax[1, 1].text(0.05, 0.9, f'$r^2$ = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax[1, 1].transAxes)
+# # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
+# ax[1, 1].set_xlabel('Initial prediction error')
+# ax[1, 1].set_ylabel('Step number')
 
-fig.suptitle('Reward = '+str(reward)+'; Penalty = '+str(penalty))
-# fig.tight_layout()
+fig.suptitle(f'Network optimisation for {cl} with reward {reward}')
+fig.tight_layout()
 
-figsave_flag = True
+figsave_flag = 1
 fig_path = '../figures/2-celltypes/optim-net/A549-ATCC'
 if figsave_flag:
     try:
         os.makedirs(fig_path)
     except:
         pass
-    fig.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'network-predictions.png', dpi=300)
+    fig.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-network-predictions.png', dpi=300)
     plt.close(fig)
 
 ##### Check out the best performing network
@@ -157,10 +150,10 @@ met_meas_after = metabolome_meas_after_list[i_best_net][0].astype(np.float64)
 i_before = valid_index_before_list[i_best_net][0].astype(bool)
 i_after = valid_index_after_list[i_best_net][0].astype(bool)
 
-c_before = np.where(p_arr_ori == 1, 'tab:blue', np.where(p_arr_ori == 2, 'tab:green', 'tab:red'))#np.where(i_before, 'b', 'k')
+c_before = np.where(p_arr_ori == 1, 'b', np.where(p_arr_ori == 2, 'g', 'tab:red'))#np.where(i_before, 'b', 'k')
 c_before = np.where(i_before, c_before, 'tab:gray')
 
-c_after = np.where(p_arr_optim == 1, 'tab:blue', np.where(p_arr_optim == 2, 'tab:green', 'tab:red'))#np.where(i_before, 'b', 'k')
+c_after = np.where(p_arr_optim == 1, 'b', np.where(p_arr_optim == 2, 'g', 'tab:red'))#np.where(i_before, 'b', 'k')
 c_after = np.where(i_after, c_after, 'tab:gray')
 
 a_before = np.where(i_before, 0.8, 0.25)
@@ -188,9 +181,9 @@ ax[1].text(0.05, 0.8, r'$\chi_{excess}=$'+f'{final_residual[i_best_net][0].round
 fig.supxlabel(r'$log_{10}\ Predicted\ metabolome$')
 fig.tight_layout(pad=0.2)
 
-figsave_flag = True
+figsave_flag = 1
 if figsave_flag:
-    fig.savefig(fig_path+'/reward-'+str(reward)+'-penalty'+str(penalty)+'prediction-comparison.png', dpi=300)
+    fig.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-prediction-comparison.png', dpi=300)
     plt.close(fig)
 else:
     plt.show()
