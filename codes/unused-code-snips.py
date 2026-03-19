@@ -758,3 +758,95 @@
 #     f.suptitle(r'$N_{produced} = $'+str(npro))
 #     f.tight_layout()
 
+#################################################################
+### cancer-no-learning-networks
+    # pro_edges_ct1 = chosen_edges[np.isin(chosen_edges, low_mets)]
+    # pro_edges_ct2 = chosen_edges[np.isin(chosen_edges, high_mets)]
+
+    # # ### Production edges without partition
+    # # rand = np.random.randint(low=1, high=npro)
+    # # num_prod_ct1 = rand
+    # # num_prod_ct2 = npro - rand
+    # # pro_edges_ct1 = np.random.choice(chosen_edges, size=num_prod_ct1, replace=False)
+    # # pro_edges_ct2 = np.random.choice(chosen_edges, size=num_prod_ct2, replace=False)
+
+    # rand = np.random.randint(low=1, high=npro)
+    # num_con_ct1 = rand
+    # num_con_ct2 = npro-rand
+    # all_edges = np.random.permutation(np.concatenate([pro_edges_ct1, pro_edges_ct2]))
+    # con_edges_ct1 = all_edges[:rand]
+    # con_edges_ct2 = all_edges[rand:]
+
+    # ### Assigning edges to the two celltype network
+    # nc1 = net_consumption[net_consumption['celltypes']==0]
+    # nc2 = net_consumption[net_consumption['celltypes']==1]
+    # nc1.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), con_edges_ct1), 2, 0)
+    # nc2.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), con_edges_ct2), 2, 0)   
+    # net_consumption = pd.concat([nc1, nc2])
+
+    # np1 = net_production[net_production['celltypes']==0]
+    # np2 = net_production[net_production['celltypes']==1]
+    # np1.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), pro_edges_ct1), 3, 0)
+    # np2.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), pro_edges_ct2), 3, 0)
+    # net_production = pd.concat([np1, np2])
+
+        # # ### Production edges without partition
+        # # rand = np.random.randint(low=1, high=npro)
+        # # num_prod_ct1 = rand
+        # # num_prod_ct2 = npro - rand
+        # # pro_edges_ct1 = np.random.choice(chosen_edges, size=num_prod_ct1, replace=False)
+        # # pro_edges_ct2 = np.random.choice(chosen_edges, size=num_prod_ct2, replace=False)
+
+        # ### Within the interconversion regime, consumption is random
+        # rand = np.random.randint(low=1, high=npro)
+        # num_con_ct1 = rand
+        # num_con_ct2 = npro-rand
+        # all_edges = np.random.permutation(np.concatenate([pro_edges_ct1, pro_edges_ct2]))
+        # con_edges_ct1 = all_edges[:rand]
+        # con_edges_ct2 = all_edges[rand:]
+
+        # ### Assigning edges to the two celltype network
+        # nc1 = net_consumption[net_consumption['celltypes']==0]
+        # nc2 = net_consumption[net_consumption['celltypes']==1]
+        # nc1.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), con_edges_ct1), 2, 0)
+        # nc2.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), con_edges_ct2), 2, 0)   
+        # net_consumption = pd.concat([nc1, nc2])
+
+        # np1 = net_production[net_production['celltypes']==0]
+        # np2 = net_production[net_production['celltypes']==1]
+        # np1.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), pro_edges_ct1), 3, 0)
+        # np2.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), pro_edges_ct2), 3, 0)
+        # net_production = pd.concat([np1, np2])
+
+    # ### Assigning edges to the two celltype network
+    # nc1 = net_consumption[net_consumption['celltypes']==0]
+    # nc2 = net_consumption[net_consumption['celltypes']==1]
+    # nc1.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), con_edges_ct1), 2, 0)
+    # nc2.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), con_edges_ct2), 2, 0)   
+    # net_consumption = pd.concat([nc1, nc2])
+
+    # np1 = net_production[net_production['celltypes']==0]
+    # np2 = net_production[net_production['celltypes']==1]
+    # np1.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), pro_edges_ct1), 3, 0)
+    # np2.iloc[:, -1] = np.where(np.isin(np.arange(MAX_ID_metabolites), pro_edges_ct2), 3, 0)
+    # net_production = pd.concat([np1, np2])
+
+    # net_2ct = pd.concat([net_consumption, net_production])
+
+    # cf = np.round(np.random.uniform(0, 1), decimals=2)
+    # ct0_2ct = np.array([cf, 1-cf])*cellnum_init_all[0]
+
+# con_index_ct1 = np.where(consumption_ct_arr_2ct[i_min_diff]==0, True, False)[0]*index_arr_2ct[i_min_diff]
+# con_index_ct2 = np.where(consumption_ct_arr_2ct[i_min_diff]==1, True, False)[0]*index_arr_2ct[i_min_diff]
+# ax[1].scatter(np.log10(ec_pred_arr_2ct[i_min_diff][con_index_ct2]), 
+#                 np.log10(ec_real[con_index_ct2[0]]),
+#             c=colors[con_index_ct2], marker='X',
+#             alpha=0.6, edgecolor='face')
+
+# con_index_ct1 = np.where(consumption_ct_arr_2ct[i_max_diff]==0, True, False)[0]*index_arr_2ct[i_max_diff]
+# con_index_ct2 = np.where(consumption_ct_arr_2ct[i_max_diff]==1, True, False)[0]*index_arr_2ct[i_max_diff]
+
+# ax[2].scatter(np.log10(ec_pred_arr_2ct[i_max_diff][con_index_ct2]), 
+#                 np.log10(ec_real[con_index_ct2[0]]),
+#             c=colors[con_index_ct2], marker='X',
+#             alpha=0.6, edgecolor='face')
