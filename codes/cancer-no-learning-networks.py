@@ -507,7 +507,7 @@ n_produced_arr_1ct, n_produced_arr_2ct = np.array(n_produced_arr_1ct), np.array(
 balance_flag_arr = np.array(balance_flag_arr)
 balance_arr_1ct, balance_arr_2ct = np.array(balance_arr_1ct), np.array(balance_arr_2ct[1:])
 
-pickle_out = open(home_dir + "/2-celltype-balanced-networks.pickle", "wb")
+pickle_out = open(home_dir + '/' + str(n_ct) +"-celltype-balanced-networks.pickle", "wb")
 #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
 pickle.dump([balance_arr_1ct, balance_arr_2ct, balance_flag_arr, balanced_networks_list,
              rmse_arr_1ct, rmse_arr_2ct], pickle_out, protocol=2)
