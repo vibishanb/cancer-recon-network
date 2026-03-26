@@ -271,10 +271,10 @@ cellnum_init_all = cellnum_init_all[i_sublinear]
 cellnum_final_all = cellnum_final_all[i_sublinear]
 
 net_state = 'no-learn-balanced-net/'
-for n_ct in np.arange(5, 6):
+for n_ct in np.arange(6, 7):
 
     n_rand = 100
-    n_reps = 100
+    n_reps = 150
     # npro_arr = np.repeat(np.array([50])[np.newaxis, :], n_reps*2, axis=1).ravel()
     # nct_arr = np.repeat(np.array([[1]*n_reps, [2]*n_reps]).ravel()[np.newaxis, :], 1, axis=0).ravel()
     for j in tqdm(range(len(i_sublinear[:1])), desc='Cell line: '):
@@ -373,12 +373,12 @@ for n_ct in np.arange(5, 6):
             ### Within the interconversion regime, consumption is random
             # num_con = np.array([np.random.randint(1, npro-1) for i in range(n_ct-1)])
             # num_con = np.append(num_con, npro-num_con.sum())
-            rand = np.random.exponential(5, n_ct) #np.random.uniform(0, 1, n_ct) #(1.5*np.arange(1, n_ct+1)) + np.random.uniform(0, 1, n_ct)
+            rand = np.random.exponential(5, n_ct) # np.random.uniform(0, 1, n_ct)
             rand = rand/rand.sum()
-            num_con = (rand*MAX_ID_metabolites*0.5).astype(int)
-            diff = num_con.sum() - MAX_ID_metabolites
+            num_con = (rand*MAX_ID_metabolites).astype(int)
+            delta = num_con.sum() - MAX_ID_metabolites
             i_rand = np.random.choice(np.arange(n_ct), 1)
-            num_con[i_rand] -= diff
+            num_con[i_rand] -= delta
             num_con = np.sort(num_con)
             con_celltypes = np.random.permutation(np.repeat(np.arange(n_ct), num_con))
             
@@ -424,10 +424,10 @@ for n_ct in np.arange(5, 6):
 
             # If any part of the balance is violated for either celltype, resample links till the balance is satisfied
             count = 0
-            while (count <= 2*n_reps) * ((balance < 0.05)+(balance > 2)).any():
+            while (count <= n_reps) * ((balance < 0.05)+(balance > 2)).any():
                 # print("Sampled links rejected for balance values " + str(Xpro_ct1) + " and " + str(Xpro_ct2))
                 # con_celltypes = np.random.choice(np.arange(n_ct), len(prod_celltypes))
-                rand = np.random.exponential(5, n_ct) #np.random.uniform(0, 1, n_ct) #(1.5*np.arange(1, n_ct+1)) + np.random.uniform(0, 1, n_ct)
+                rand = np.random.exponential(5, n_ct) # np.random.uniform(0, 1, n_ct)
                 rand = rand/rand.sum()
                 num_con = (rand*MAX_ID_metabolites).astype(int)
                 delta = num_con.sum() - MAX_ID_metabolites
@@ -475,7 +475,7 @@ for n_ct in np.arange(5, 6):
                 # print("Balance failed")
             else:
                 balance_flag = True
-                print("Sampled links accepted for balance values " + str(balance.round(decimals=3).tolist()) + " and " + str(num_con.tolist()) + " mets consumed")
+                # print("Sampled links accepted for balance values " + str(balance.round(decimals=3).tolist()) + " and " + str(num_con.tolist()) + " mets consumed")
             
             balance_flag_arr.append(balance_flag)
             balance_arr_nct.append(balance)
@@ -520,16 +520,19 @@ for n_ct in np.arange(5, 6):
         balance_flag_arr = np.array(balance_flag_arr)
         balance_arr_1ct, balance_arr_nct = np.array(balance_arr_1ct), np.array(balance_arr_nct[1:])
 
-        # pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/'+net_state+sublinear_cell_lines[j]
-        # try:
-        #     os.makedirs(pickle_path)
-        # except:
-        #     pass
-        # pickle_out = open(pickle_path+"/balanced-networks.pickle", "wb")
-        # #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
-        # pickle.dump([balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
-        #             rmse_arr_1ct, rmse_arr_nct], pickle_out, protocol=2)
-        # pickle_out.close()
+        pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/'+net_state+sublinear_cell_lines[j]
+        try:
+            os.makedirs(pickle_path)
+        except:
+            pass
+        pickle_out = open(pickle_path+"/balanced-networks.pickle", "wb")
+        #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
+        pickle.dump([balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
+                    rmse_arr_1ct, rmse_arr_nct,
+                    ec_pred_arr_1ct, ec_pred_arr_nct,
+                    index_arr_1ct, index_arr_nct,
+                    production_ct_arr_1ct, production_ct_arr_nct], pickle_out, protocol=2)
+        pickle_out.close()
 
 # %%
 net_state = 'no-learn-balanced-net/'
@@ -623,11 +626,13 @@ i_max_diff = np.where(rmse_diff == rmse_diff.max(), True, False)
 colors = np.where(production_ct_arr_1ct[i_min_diff]==1, 'b', 
                   np.where(production_ct_arr_1ct[i_min_diff]==2, 'g',
                            np.where(production_ct_arr_1ct[i_min_diff]==3, 'm',
-                                    np.where(production_ct_arr_1ct[i_min_diff]==4, 'orange', 'cyan'))))
+                                    np.where(production_ct_arr_1ct[i_min_diff]==4, 'saddlebrown',
+                                             np.where(production_ct_arr_1ct[i_min_diff]==5, 'cyan', 'teal')))))
 labels = np.where(production_ct_arr_1ct[i_min_diff]==1, 'CT1', 
                   np.where(production_ct_arr_1ct[i_min_diff]==2, 'CT2',
                            np.where(production_ct_arr_1ct[i_min_diff]==3, 'CT3',
-                                    np.where(production_ct_arr_1ct[i_min_diff]==4, 'CT4', 'CT5'))))
+                                    np.where(production_ct_arr_1ct[i_min_diff]==4, 'CT4',
+                                             np.where(production_ct_arr_1ct[i_min_diff]==5, 'CT5', 'CT6')))))
 
 ax[0].scatter(np.log10(ec_pred_arr_1ct[i_min_diff][index_arr_1ct[i_min_diff]]), 
                 np.log10(ec_real[index_arr_1ct[i_min_diff][0]]),
@@ -641,11 +646,13 @@ ax[0].text(0.05, 0.9, f'RMSE = {rmse_arr_1ct[i_min_diff][0]:.2f}', transform=ax[
 colors = np.where(production_ct_arr_nct[i_min_diff]==1, 'b', 
                   np.where(production_ct_arr_nct[i_min_diff]==2, 'g',
                            np.where(production_ct_arr_nct[i_min_diff]==3, 'm',
-                                    np.where(production_ct_arr_nct[i_min_diff]==4, 'saddlebrown', 'cyan'))))
+                                    np.where(production_ct_arr_nct[i_min_diff]==4, 'saddlebrown',
+                                             np.where(production_ct_arr_nct[i_min_diff]==5, 'cyan', 'black')))))
 labels = np.where(production_ct_arr_nct[i_min_diff]==1, 'CT1', 
                   np.where(production_ct_arr_nct[i_min_diff]==2, 'CT2',
                            np.where(production_ct_arr_nct[i_min_diff]==3, 'CT3',
-                                    np.where(production_ct_arr_nct[i_min_diff]==4, 'CT4', 'CT5'))))
+                                    np.where(production_ct_arr_nct[i_min_diff]==4, 'CT4',
+                                             np.where(production_ct_arr_nct[i_min_diff]==5, 'CT5', 'CT6')))))
 
 # con_index_ct1 = np.where(consumption_ct_arr_nct[i_min_diff]==0, True, False)[0]*index_arr_nct[i_min_diff]
 # con_index_ct2 = np.where(consumption_ct_arr_nct[i_min_diff]==1, True, False)[0]*index_arr_nct[i_min_diff]
@@ -664,11 +671,13 @@ ax[1].text(0.5, 0.9, f'RMSE = {rmse_arr_nct[i_min_diff][0]:.2f}', transform=ax[1
 colors = np.where(production_ct_arr_nct[i_max_diff]==1, 'b', 
                   np.where(production_ct_arr_nct[i_max_diff]==2, 'g',
                            np.where(production_ct_arr_nct[i_max_diff]==3, 'm',
-                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'saddlebrown', 'cyan'))))
+                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'saddlebrown',
+                                             np.where(production_ct_arr_nct[i_max_diff]==5, 'cyan', 'black')))))
 labels = np.where(production_ct_arr_nct[i_max_diff]==1, 'CT1', 
                   np.where(production_ct_arr_nct[i_max_diff]==2, 'CT2',
                            np.where(production_ct_arr_nct[i_max_diff]==3, 'CT3',
-                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'CT4', 'CT5'))))
+                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'CT4',
+                                             np.where(production_ct_arr_nct[i_max_diff]==5, 'CT5', 'CT6')))))
 # con_index_ct1 = np.where(consumption_ct_arr_nct[i_max_diff]==0, True, False)[0]*index_arr_nct[i_max_diff]
 # con_index_ct2 = np.where(consumption_ct_arr_nct[i_max_diff]==1, True, False)[0]*index_arr_nct[i_max_diff]
 ax[2].scatter(np.log10(ec_pred_arr_nct[i_max_diff][index_arr_nct[i_max_diff]]), 
