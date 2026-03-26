@@ -25,7 +25,7 @@ from numpy import matlib
 from tqdm import tqdm
 # %%
 ############ Figure size settings
-SMALL_SIZE = 12
+SMALL_SIZE = 14
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 15
 
@@ -260,262 +260,280 @@ i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_line
 all_networks = []
 for i in i_sublinear:
     all_networks.append(nets_temp[i])
-net, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_networks[0])
+
+# net, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_networks[0])
 
 ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
 diet = met_baseline.mean(axis=1)
-ec_real = ec_metabolome.iloc[:, 0].values
-low_mets = np.where(ec_real <= np.median(ec_real))[0]
-high_mets = np.where(ec_real > np.median(ec_real))[0]
-
-i_nonzero_celltypes = all_networks[0]['celltypes_ID'].unique()
-i_nonzero_celltypes = np.sort(i_nonzero_celltypes)
-i_nonzero_celltypes = celltype_ID.values.copy()
-i_nonzero_metabolites = all_networks[0]['metabolites_ID'].unique()
 # i_nonzero_metabolites = np.sort(i_nonzero_metabolites)
 
 cellnum_init_all = cellnum_init_all[i_sublinear]
 cellnum_final_all = cellnum_final_all[i_sublinear]
 
-MAX_ID_celltypes = len(i_nonzero_celltypes)  # MAX_ID_celltypes is the maximum of ID labels for celltypes.
-MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
-max_links = MAX_ID_celltypes*MAX_ID_metabolites
+net_state = 'no-learn-balanced-net/'
+for n_ct in np.arange(5, 6):
 
-# net, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_networks[0])
+    n_rand = 100
+    n_reps = 100
+    # npro_arr = np.repeat(np.array([50])[np.newaxis, :], n_reps*2, axis=1).ravel()
+    # nct_arr = np.repeat(np.array([[1]*n_reps, [2]*n_reps]).ravel()[np.newaxis, :], 1, axis=0).ravel()
+    for j in tqdm(range(len(i_sublinear[:1])), desc='Cell line: '):
+        rmse_arr_1ct, rmse_arr_nct = [], []
+        balance_flag_arr = []
+        balance_arr_1ct, balance_arr_nct = [], [[]]
+        n_produced_arr_1ct, n_produced_arr_nct = [], []
+        cf_arr = [[]]
+        rep_arr = []
+        ec_pred_arr_1ct, ec_pred_arr_nct = [[]], [[]]
+        index_arr_1ct, index_arr_nct = [[]], [[]]
+        production_ct_arr_1ct, production_ct_arr_nct = [[]], [[]]
+        consumption_ct_arr_1ct, consumption_ct_arr_nct = [[]], [[]]
+        nct_arr = []
+        final_nets_arr = []
+        balanced_networks_list = []
 
-rmse_arr_1ct, rmse_arr_2ct = [], []
-balance_flag_arr = []
-balance_arr_1ct, balance_arr_2ct = [], [[]]
-n_produced_arr_1ct, n_produced_arr_2ct = [], []
-cf_arr = []
-rep_arr = []
-ec_pred_arr_1ct, ec_pred_arr_2ct = [[]], [[]]
-index_arr_1ct, index_arr_2ct = [[]], [[]]
-production_ct_arr_1ct, production_ct_arr_2ct = [[]], [[]]
-consumption_ct_arr_1ct, consumption_ct_arr_2ct = [[]], [[]]
-nct_arr = []
-final_nets_arr = []
-balanced_networks_list = []
-# max_links = MAX_ID_metabolites * MAX_ID_celltypes
+        ec_real = ec_metabolome.iloc[:, j].values
+        low_mets = np.where(ec_real <= np.median(ec_real))[0]
+        high_mets = np.where(ec_real > np.median(ec_real))[0]
 
-n_rand = 100
-n_reps = 100
-npro = MAX_ID_metabolites
-# npro_arr = np.repeat(np.array([50])[np.newaxis, :], n_reps*2, axis=1).ravel()
-# nct_arr = np.repeat(np.array([[1]*n_reps, [2]*n_reps]).ravel()[np.newaxis, :], 1, axis=0).ravel()
+        for i in tqdm(range(n_rand), desc='Replicate: ', leave=False):
 
-for i in range(n_rand):
-    max_links = MAX_ID_celltypes * MAX_ID_metabolites
-    net, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_networks[0])
+            net, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_networks[j])
+            max_links = MAX_ID_celltypes * MAX_ID_metabolites
+            npro = MAX_ID_metabolites
+            
+            ### Random starting network with one celltype
+            all_edges = np.arange(MAX_ID_metabolites)
+            net_consumption = net.iloc[:max_links, :]
+            net_production = net.iloc[max_links:, :]
 
-    ### Random starting network with one celltype
-    # net.iloc[:, -1] = 0
-    all_edges = np.arange(MAX_ID_metabolites)
-    net_consumption = net.iloc[:max_links, :]
-    net_production = net.iloc[max_links:, :]
+            chosen_edges = np.random.choice(all_edges, size=npro, replace=False) # Select a random subset of 'npro' mets for the one celltype model to produce and consume
+            # net_consumption.iloc[:, -1] = np.zeros(max_links)
+            net_consumption.loc[:, 'edgeType'] = np.where(np.isin(np.arange(MAX_ID_metabolites), chosen_edges), 2, 0)
+            net_production.loc[:, 'edgeType'] = np.where(np.isin(np.arange(MAX_ID_metabolites), chosen_edges), 3, 0)
+            net_1ct = pd.concat([net_consumption, net_production])
+            #### For max celltypes = 1, no model fitting, final cell number is taken directly from cell number at confluency
+            ct_final = cellnum_final_all[j]*celltypefreq.values
 
-    chosen_edges = np.random.choice(all_edges, size=npro, replace=False) # Select a random subset of 'npro' mets for the one celltype model to produce and consume
-    # net_consumption.iloc[:, -1] = np.zeros(max_links)
-    net_consumption.loc[:, 'edgeType'] = np.where(np.isin(np.arange(MAX_ID_metabolites), chosen_edges), 2, 0)
-    net_production.loc[:, 'edgeType'] = np.where(np.isin(np.arange(MAX_ID_metabolites), chosen_edges), 3, 0)
-    net_1ct = pd.concat([net_consumption, net_production])
-    #### For max celltypes = 1, no model fitting, final cell number is taken directly from cell number at confluency
-    ct_final = cellnum_final_all[0]*celltypefreq.values
+            ### Calculate predicted metabolome for the single celltype
+            m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_1ct, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes=1)
+            cf_final = ct_final[0]/ct_final.sum()
 
-    ### Calculate predicted metabolome for the single celltype
-    m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_1ct, in_degree_flag, MAX_ID_metabolites, 1)
-    cf_final = ct_final[0]/ct_final.sum()
+            i_nonzero = np.where(ec_pred * ec_real, True, False)
+            i_filt = np.where((b2m.sum(0) > 0), True, False)
+            i_final = i_nonzero * i_filt
 
-    i_nonzero = np.where(ec_pred * ec_real, True, False)
-    i_filt = np.where((b2m.sum(0) > 0), True, False)
-    i_final = i_nonzero * i_filt
+            diff = np.log10(ec_pred[i_final]) - np.log10(ec_real[i_final]) # / np.log10(ec_real[i_nonzero])
+            pred_error = np.sqrt(np.mean(diff**2)) #np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
 
-    diff = np.log10(ec_pred[i_final]) - np.log10(ec_real[i_final]) # / np.log10(ec_real[i_nonzero])
-    pred_error = np.sqrt(np.mean(diff**2)) #np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
+            balance = ec_pred[chosen_edges].sum()/diet.values[chosen_edges].sum()
+            
+            p_arr = np.array([i*j for i, j in zip(b2m, [1, 2])]).sum(0)
+            c_arr = np.array([i*j for i, j in zip(m2b, [1, 2])]).sum(0)
+            rmse_arr_1ct.append(pred_error)
+            n_produced_arr_1ct.append(npro)
+            ec_pred_arr_1ct.append(ec_pred)
+            index_arr_1ct.append(i_final)
+            production_ct_arr_1ct.append(p_arr)
+            consumption_ct_arr_1ct.append(c_arr)
+            balance_arr_1ct.append(balance)
+            
+            ### Splitting the above one celltype into a network with n_ct celltypes
+            # n_ct = 4
+            max_links = MAX_ID_metabolites*n_ct
 
-    balance = ec_pred[chosen_edges].sum()/diet.values[chosen_edges].sum()
-    
-    p_arr = np.array([i*j for i, j in zip(b2m, [1, 2])]).sum(0)
-    c_arr = np.array([i*j for i, j in zip(m2b, [1, 2])]).sum(0)
-    rmse_arr_1ct.append(pred_error)
-    n_produced_arr_1ct.append(npro)
-    ec_pred_arr_1ct.append(ec_pred)
-    index_arr_1ct.append(i_final)
-    production_ct_arr_1ct.append(p_arr)
-    consumption_ct_arr_1ct.append(c_arr)
-    balance_arr_1ct.append(balance)
-    
-    ### Splitting the above one celltype into a network with n_ct celltypes
-    n_ct = 3
-    max_links = MAX_ID_metabolites*n_ct
+            quantiles = np.quantile(ec_real, np.linspace(0, 1, n_ct+1)[1:-1])
+            prod_celltypes = np.zeros_like(ec_real)
+            for i in range(n_ct-1):
+                prod_celltypes = np.where(ec_real <= quantiles[i], prod_celltypes, prod_celltypes+1)
+            prod_celltypes = np.int64(prod_celltypes)
+            # net_temp = net.copy()
+            # net_temp.iloc[max_links:, 1] = np.ones(max_links)
+            # net_nct = pd.concat([net_temp, net_temp])
 
-    quantiles = np.quantile(ec_real, np.linspace(0, 1, n_ct+1)[1:-1])
-    prod_celltypes = np.zeros_like(ec_real)
-    for i in range(n_ct-1):
-        prod_celltypes = np.where(ec_real <= quantiles[i], prod_celltypes, prod_celltypes+1)
-    prod_celltypes = np.int64(prod_celltypes)
-    # net_temp = net.copy()
-    # net_temp.iloc[max_links:, 1] = np.ones(max_links)
-    # net_2ct = pd.concat([net_temp, net_temp])
+            net_split = pd.concat([net]*n_ct)
+            net_split.loc[:, 'celltypes'] = np.concatenate([np.repeat(np.arange(n_ct), MAX_ID_metabolites)]*2)
+            net_split.loc[:, 'edgeType'] = 0
+            net_consumption = net_split.iloc[:max_links, :]
+            net_production = net_split.iloc[max_links:, :]
 
-    net_split = pd.concat([net]*n_ct)
-    net_split.loc[:, 'celltypes'] = np.concatenate([np.repeat(np.arange(n_ct), MAX_ID_metabolites)]*2)
-    net_split.loc[:, 'edgeType'] = 0
-    net_consumption = net_split.iloc[:max_links, :]
-    net_production = net_split.iloc[max_links:, :]
+            ### Production edges with partition-no metabolites are left unproduced
+            for i in range(n_ct):
+                i_prod = np.where(prod_celltypes == i, True, False)
+                ct_index = np.where(net_production.loc[:, 'celltypes']==i)[0]
 
-    ### Production edges with partition-no metabolites are left unproduced
-    for i in range(n_ct):
-        i_prod = np.where(prod_celltypes == i, True, False)
-        ct_index = np.where(net_production.loc[:, 'celltypes']==i)[0]
-        net_production.iloc[ct_index[i_prod], -1] = 3
-        net_production.iloc[ct_index[~i_prod], -1] = 0
+                pro_edges = net_production.loc[:, 'edgeType'].values
+                pro_edges[ct_index[i_prod]] = 3
+                pro_edges[ct_index[~i_prod]] = 0
+                
+                net_production.loc[:, 'edgeType'] = pro_edges.copy()
+                # net_production.iloc[ct_index[i_prod], -1] = 3
+                # net_production.iloc[ct_index[~i_prod], -1] = 0
 
-    ### Within the interconversion regime, consumption is random
-    # num_con = np.array([np.random.randint(1, npro-1) for i in range(n_ct-1)])
-    # num_con = np.append(num_con, npro-num_con.sum())
-    rand = np.random.uniform(0, 1, n_ct)
-    rand = rand/rand.sum()
-    num_con = (rand*MAX_ID_metabolites).astype(int)
-    diff = num_con.sum() - MAX_ID_metabolites
-    i_rand = np.random.choice(np.arange(n_ct), 1)
-    num_con[i_rand] -= diff
-    con_celltypes = np.random.permutation(np.repeat(np.arange(n_ct), num_con))
-    
-    for i in range(n_ct):
-        i_con = np.where(con_celltypes == i, True, False)  
-        ct_index = np.where(net_consumption.loc[:, 'celltypes']==i)[0]
-        net_consumption.iloc[ct_index[i_con], -1] = 2
-        net_consumption.iloc[ct_index[~i_con], -1] = 0
-    net_2ct = pd.concat([net_consumption, net_production])
+            ### Within the interconversion regime, consumption is random
+            # num_con = np.array([np.random.randint(1, npro-1) for i in range(n_ct-1)])
+            # num_con = np.append(num_con, npro-num_con.sum())
+            rand = np.random.exponential(5, n_ct) #np.random.uniform(0, 1, n_ct) #(1.5*np.arange(1, n_ct+1)) + np.random.uniform(0, 1, n_ct)
+            rand = rand/rand.sum()
+            num_con = (rand*MAX_ID_metabolites*0.5).astype(int)
+            diff = num_con.sum() - MAX_ID_metabolites
+            i_rand = np.random.choice(np.arange(n_ct), 1)
+            num_con[i_rand] -= diff
+            num_con = np.sort(num_con)
+            con_celltypes = np.random.permutation(np.repeat(np.arange(n_ct), num_con))
+            
+            for i in range(n_ct):
+                i_con = np.where(con_celltypes == i, True, False)  
+                ct_index = np.where(net_consumption.loc[:, 'celltypes']==i)[0]
 
-    cf = np.round(np.random.uniform(0, 1, n_ct), decimals=2)
-    cf = cf/cf.sum()
-    ct0_2ct = cf*cellnum_init_all[0]
+                con_edges = net_consumption.loc[:, 'edgeType'].values
+                con_edges[ct_index[i_con]] = 2
+                con_edges[ct_index[~i_con]] = 0
+                
+                net_consumption.loc[:, 'edgeType'] = con_edges.copy()
 
-    ### Learn the best celltype frequency
-    ct_final = np.zeros_like(ct0_2ct) # Final cell number, either fitted or taken depending on number of cell types
-    my_args = (net_2ct, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, n_ct)
-    bnds = ((0, cellnum_final_all[0]), ) * len(ct0_2ct)
-    constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_final_all[0]}
-    res = minimize(calc_pred_error, ct0_2ct, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
-    ct_final = res.x #res.x.max()/cellnum_max
-    
-    ### Calculate predicted metabolome using the fitted celltype frequencies
-    m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_2ct, in_degree_flag, MAX_ID_metabolites, n_ct)
+                # net_consumption.iloc[ct_index[i_con], -1] = 2
+                # net_consumption.iloc[ct_index[~i_con], -1] = 0
+            net_nct = pd.concat([net_consumption, net_production])
 
-    #### Production-consumption balance for the two celltype network
-    ## Balance calculation
-    balance = np.zeros(n_ct)
-    for i in range(n_ct):
-        net_temp = net_2ct[net_2ct['celltypes']==i]
-        i_consumed = np.where(net_temp.iloc[:MAX_ID_metabolites, -1]==2)[0]
-        i_produced = np.where(net_temp.iloc[MAX_ID_metabolites:, -1]==3)[0]
-        flux_consumption = diet.values[i_consumed].sum()
-        flux_production = ec_real[i_produced].sum()
-        balance[i] = flux_production/flux_consumption
+            cf = np.round(np.random.uniform(0, 1, n_ct), decimals=2)
+            cf = cf/cf.sum()
+            ct0_nct = cf*cellnum_init_all[j]
 
-    # If any part of the balance is violated for either celltype, resample links till the balance is satisfied
-    count = 0
-    while (count <= 300) * ((balance < 0.1)+(balance > 1)).any():
-        # print("Sampled links rejected for balance values " + str(Xpro_ct1) + " and " + str(Xpro_ct2))
-        # con_celltypes = np.random.choice(np.arange(n_ct), len(prod_celltypes))
-        rand = np.random.uniform(0, 1, n_ct)
-        rand = rand/rand.sum()
-        num_con = (rand*MAX_ID_metabolites).astype(int)
-        diff = num_con.sum() - MAX_ID_metabolites
-        i_rand = np.random.choice(np.arange(n_ct), 1)
-        num_con[i_rand] -= diff
-        con_celltypes = np.random.permutation(np.repeat(np.arange(n_ct), num_con))
-        for i in range(n_ct):
-            i_con = np.where(con_celltypes == i, True, False)  
-            ct_index = np.where(net_consumption.loc[:, 'celltypes']==i)[0]
-            net_consumption.iloc[ct_index[i_con], -1] = 2
-            net_consumption.iloc[ct_index[~i_con], -1] = 0
+            ### Learn the best celltype frequency
+            ct_final = np.zeros_like(ct0_nct) # Final cell number, either fitted or taken depending on number of cell types
+            my_args = (net_nct, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, n_ct)
+            bnds = ((0, cellnum_final_all[j]), ) * len(ct0_nct)
+            constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_final_all[j]}
+            res = minimize(calc_pred_error, ct0_nct, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+            ct_final = res.x
+            
+            ### Calculate predicted metabolome using the fitted celltype frequencies
+            m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_nct, in_degree_flag, MAX_ID_metabolites, n_ct)
 
-        net_2ct = pd.concat([net_consumption, net_production])
+            #### Production-consumption balance for the two celltype network
+            ## Balance calculation
+            balance = np.zeros(n_ct)
+            for i in range(n_ct):
+                net_temp = net_nct[net_nct['celltypes']==i]
+                i_consumed = np.where(net_temp.iloc[:MAX_ID_metabolites, -1]==2)[0]
+                i_produced = np.where(net_temp.iloc[MAX_ID_metabolites:, -1]==3)[0]
+                flux_consumption = diet.values[i_consumed].sum()
+                flux_production = ec_real[i_produced].sum()
+                balance[i] = flux_production/flux_consumption
 
-        ### Learn the best celltype frequency
-        ct_final = np.zeros_like(ct0_2ct) # Final cell number, either fitted or taken depending on number of cell types
-        my_args = (net_2ct, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, n_ct)
-        bnds = ((0, cellnum_final_all[0]), ) * len(ct0_2ct)
-        constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_final_all[0]}
-        res = minimize(calc_pred_error, ct0_2ct, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
-        ct_final = res.x #res.x.max()/cellnum_max
-        
-        ### Calculate predicted metabolome using the fitted celltype frequencies
-        m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_2ct, in_degree_flag, MAX_ID_metabolites, n_ct)
+            # If any part of the balance is violated for either celltype, resample links till the balance is satisfied
+            count = 0
+            while (count <= 2*n_reps) * ((balance < 0.05)+(balance > 2)).any():
+                # print("Sampled links rejected for balance values " + str(Xpro_ct1) + " and " + str(Xpro_ct2))
+                # con_celltypes = np.random.choice(np.arange(n_ct), len(prod_celltypes))
+                rand = np.random.exponential(5, n_ct) #np.random.uniform(0, 1, n_ct) #(1.5*np.arange(1, n_ct+1)) + np.random.uniform(0, 1, n_ct)
+                rand = rand/rand.sum()
+                num_con = (rand*MAX_ID_metabolites).astype(int)
+                delta = num_con.sum() - MAX_ID_metabolites
+                i_rand = np.random.choice(np.arange(n_ct), 1)
+                num_con[i_rand] -= delta
+                num_con = np.sort(num_con)
+                con_celltypes = np.random.permutation(np.repeat(np.arange(n_ct), num_con))
+                for i in range(n_ct):
+                    i_con = np.where(con_celltypes == i, True, False)  
+                    ct_index = np.where(net_consumption.loc[:, 'celltypes']==i)[0]
+                    con_edges = net_consumption.loc[:, 'edgeType'].values
+                    con_edges[ct_index[i_con]] = 2
+                    con_edges[ct_index[~i_con]] = 0
 
-        #### Recalculate production-consumption balance
-        balance = np.zeros(n_ct)
-        for i in range(n_ct):
-            net_temp = net_2ct[net_2ct['celltypes']==i]
-            i_consumed = np.where(net_temp.iloc[:MAX_ID_metabolites, -1]==2)[0]
-            i_produced = np.where(net_temp.iloc[MAX_ID_metabolites:, -1]==3)[0]
-            flux_consumption = diet.values[i_consumed].sum()
-            flux_production = ec_real[i_produced].sum()
-            balance[i] = flux_production/flux_consumption
-        count += 1
+                    net_consumption.loc[:, 'edgeType'] = con_edges.copy()
+                    # net_consumption.iloc[ct_index[i_con], -1] = 2
+                    # net_consumption.iloc[ct_index[~i_con], -1] = 0
 
-    # print("Sampled links accepted for balance values " + str(Xpro_ct1) + " and " + str(Xpro_ct2))
+                net_nct = pd.concat([net_consumption, net_production])
 
-    if ((balance < 0.1)+(balance > 1)).any():
-        balance_flag = False
-    else:
-        balance_flag = True
-    
-    balance_flag_arr.append(balance_flag)
-    balance_arr_2ct.append(balance)
+                ### Learn the best celltype frequency
+                ct_final = np.zeros_like(ct0_nct)
+                my_args = (net_nct, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, n_ct)
+                bnds = ((0, cellnum_final_all[j]), ) * len(ct0_nct)
+                constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_final_all[j]}
+                res = minimize(calc_pred_error, ct0_nct, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+                ct_final = res.x #res.x.max()/cellnum_max
+                
+                ### Calculate predicted metabolome using the fitted celltype frequencies
+                m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_nct, in_degree_flag, MAX_ID_metabolites, n_ct)
 
-    ### Learn the best celltype frequency
-    ct_final = np.zeros_like(ct0_2ct) # Final cell number, either fitted or taken depending on number of cell types
-    my_args = (net_2ct, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, n_ct)
-    bnds = ((0, cellnum_final_all[0]), ) * len(ct0_2ct)
-    constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_final_all[0]}
-    res = minimize(calc_pred_error, ct0_2ct, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
-    ct_final = res.x #res.x.max()/cellnum_max
-    
-    ### Calculate predicted metabolome using the fitted celltype frequencies
-    m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_2ct, in_degree_flag, MAX_ID_metabolites, n_ct)
-    cf_final = ct_final[0]/ct_final.sum()
+                #### Recalculate production-consumption balance
+                balance = np.zeros(n_ct)
+                for i in range(n_ct):
+                    net_temp = net_nct[net_nct['celltypes']==i]
+                    i_consumed = np.where(net_temp.iloc[:MAX_ID_metabolites, -1]==2)[0]
+                    i_produced = np.where(net_temp.iloc[MAX_ID_metabolites:, -1]==3)[0]
+                    flux_consumption = diet.values[i_consumed].sum()
+                    flux_production = ec_real[i_produced].sum()
+                    balance[i] = flux_production/flux_consumption
+                count += 1
 
-    i_nonzero = np.where(ec_pred * ec_real, True, False)
-    i_filt = np.where((b2m.sum(0) > 0), True, False)
-    i_final = i_nonzero * i_filt
+            if ((balance < 0.05)+(balance > 2)).any():
+                balance_flag = False
+                # print("Balance failed")
+            else:
+                balance_flag = True
+                print("Sampled links accepted for balance values " + str(balance.round(decimals=3).tolist()) + " and " + str(num_con.tolist()) + " mets consumed")
+            
+            balance_flag_arr.append(balance_flag)
+            balance_arr_nct.append(balance)
 
-    diff = np.log10(ec_pred[i_final]) - np.log10(ec_real[i_final]) # / np.log10(ec_real[i_nonzero])
-    pred_error = np.sqrt(np.mean(diff**2)) #np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
-    
-    p_arr = np.array([i*j for i, j in zip(b2m, np.arange(1, n_ct+1))]).sum(0)
-    c_arr = np.array([i*j for i, j in zip(m2b, np.arange(1, n_ct+1))]).sum(0)
-    rmse_arr_2ct.append(pred_error)
-    cf_arr.append(cf_final.round(decimals=2))
-    n_produced_arr_2ct.append(npro)
-    ec_pred_arr_2ct.append(ec_pred)
-    index_arr_2ct.append(i_final)
-    production_ct_arr_2ct.append(p_arr)
-    consumption_ct_arr_2ct.append(c_arr)
-    balanced_networks_list.append(net_2ct)
+            ### Learn the best celltype frequency
+            ct_final = np.zeros_like(ct0_nct) # Final cell number, either fitted or taken depending on number of cell types
+            my_args = (net_nct, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, n_ct)
+            bnds = ((0, cellnum_final_all[j]), ) * len(ct0_nct)
+            constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_final_all[j]}
+            res = minimize(calc_pred_error, ct0_nct, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+            ct_final = res.x #res.x.max()/cellnum_max
+            
+            ### Calculate predicted metabolome using the fitted celltype frequencies
+            m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_nct, in_degree_flag, MAX_ID_metabolites, n_ct)
+            cf_final = ct_final/ct_final.sum()
 
-ec_pred_arr_1ct, ec_pred_arr_2ct = np.array(ec_pred_arr_1ct[1:]), np.array(ec_pred_arr_2ct[1:])
-index_arr_1ct, index_arr_2ct = np.array(index_arr_1ct[1:]), np.array(index_arr_2ct[1:])
-production_ct_arr_1ct, production_ct_arr_2ct = np.array(production_ct_arr_1ct[1:]), np.array(production_ct_arr_2ct[1:])
-consumption_ct_arr_1ct, consumption_ct_arr_2ct = np.array(consumption_ct_arr_1ct[1:]), np.array(consumption_ct_arr_2ct[1:])
-rmse_arr_1ct, rmse_arr_2ct = np.array(rmse_arr_1ct), np.array(rmse_arr_2ct)
-cf_arr = np.array(cf_arr)
-n_produced_arr_1ct, n_produced_arr_2ct = np.array(n_produced_arr_1ct), np.array(n_produced_arr_2ct)
-balance_flag_arr = np.array(balance_flag_arr)
-balance_arr_1ct, balance_arr_2ct = np.array(balance_arr_1ct), np.array(balance_arr_2ct[1:])
+            i_nonzero = np.where(ec_pred * ec_real, True, False)
+            i_filt = np.where((b2m.sum(0) > 0), True, False)
+            i_final = i_nonzero * i_filt
 
-pickle_out = open(home_dir + '/' + str(n_ct) +"-celltype-balanced-networks.pickle", "wb")
-#pickle.dump([net, i_selfish, i_intake, names], pickle_out)
-pickle.dump([balance_arr_1ct, balance_arr_2ct, balance_flag_arr, balanced_networks_list,
-             rmse_arr_1ct, rmse_arr_2ct], pickle_out, protocol=2)
-pickle_out.close()
+            diff = np.log10(ec_pred[i_final]) - np.log10(ec_real[i_final]) # / np.log10(ec_real[i_nonzero])
+            pred_error = np.sqrt(np.mean(diff**2)) #np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
+            
+            p_arr = np.array([i*j for i, j in zip(b2m, np.arange(1, n_ct+1))]).sum(0)
+            c_arr = np.array([i*j for i, j in zip(m2b, np.arange(1, n_ct+1))]).sum(0)
+            rmse_arr_nct.append(pred_error)
+            cf_arr.append(cf_final.round(decimals=2))
+            n_produced_arr_nct.append(npro)
+            ec_pred_arr_nct.append(ec_pred)
+            index_arr_nct.append(i_final)
+            production_ct_arr_nct.append(p_arr)
+            consumption_ct_arr_nct.append(c_arr)
+            balanced_networks_list.append(net_nct)
+
+        ec_pred_arr_1ct, ec_pred_arr_nct = np.array(ec_pred_arr_1ct[1:]), np.array(ec_pred_arr_nct[1:])
+        index_arr_1ct, index_arr_nct = np.array(index_arr_1ct[1:]), np.array(index_arr_nct[1:])
+        production_ct_arr_1ct, production_ct_arr_nct = np.array(production_ct_arr_1ct[1:]), np.array(production_ct_arr_nct[1:])
+        consumption_ct_arr_1ct, consumption_ct_arr_nct = np.array(consumption_ct_arr_1ct[1:]), np.array(consumption_ct_arr_nct[1:])
+        rmse_arr_1ct, rmse_arr_nct = np.array(rmse_arr_1ct), np.array(rmse_arr_nct)
+        cf_arr = np.array(cf_arr[1:])
+        n_produced_arr_1ct, n_produced_arr_nct = np.array(n_produced_arr_1ct), np.array(n_produced_arr_nct)
+        balance_flag_arr = np.array(balance_flag_arr)
+        balance_arr_1ct, balance_arr_nct = np.array(balance_arr_1ct), np.array(balance_arr_nct[1:])
+
+        # pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/'+net_state+sublinear_cell_lines[j]
+        # try:
+        #     os.makedirs(pickle_path)
+        # except:
+        #     pass
+        # pickle_out = open(pickle_path+"/balanced-networks.pickle", "wb")
+        # #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
+        # pickle.dump([balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
+        #             rmse_arr_1ct, rmse_arr_nct], pickle_out, protocol=2)
+        # pickle_out.close()
 
 # %%
 net_state = 'no-learn-balanced-net/'
-figsave_flag = 1
+figsave_flag = 0
 fig_path = '../figures/'+str(n_ct)+'-celltypes/'+net_state+ec_metabolome.columns[0]
 try:
     os.makedirs(fig_path)
@@ -524,20 +542,20 @@ except:
 
 df = pd.DataFrame({'Replicate': np.concatenate([np.arange(1, n_rand+1), np.arange(1, n_rand+1)]),
                    'N_CT': np.array([np.ones_like(rmse_arr_1ct), np.zeros_like(rmse_arr_1ct)+n_ct]).ravel().astype(int),
-                   'Balance': np.concatenate([balance_flag_arr, balance_flag_arr]).astype(int),
-                   'X_pro': np.concatenate([balance_arr_1ct, balance_arr_2ct[:, 1]]),
-                   'RMSE': np.concatenate([rmse_arr_1ct, rmse_arr_2ct])})
+                   'Balance': np.concatenate([balance_flag_arr, balance_flag_arr]),
+                   'X_pro': np.concatenate([balance_arr_1ct, balance_arr_nct[:, 1]]),
+                   'RMSE': np.concatenate([rmse_arr_1ct, rmse_arr_nct])})
 
 g = sns.lineplot(data=df, x='N_CT', y='RMSE',
                 units='Replicate', hue='Balance',
                 palette='coolwarm_r', hue_norm=(0, 1),
-                dashes=False, estimator=None, zorder=1)
+                dashes=False, estimator=None, zorder=1, legend=True)
 g = sns.scatterplot(data=df, x='N_CT', y='RMSE',
                     hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
-                    edgecolor='face', alpha=0.8, zorder=2)
+                    edgecolor='face', alpha=0.8, zorder=2, legend=False)
 g.set_xlabel(r'$N_{CT}$')
-g.set(xlim=(0.5, 3.5), xticks=[1, 3])
-g.get_legend().remove()
+g.set(xlim=(0.5, n_ct+0.5), xticks=[1, n_ct])
+
 if figsave_flag:
     g.figure.savefig(fig_path+'/balance-pairwise-comparison-npro-'+str(npro)+'.png', dpi=300)
     plt.close(g.figure)
@@ -555,25 +573,28 @@ if figsave_flag:
 else:
     plt.show()
 
-prod_df = pd.DataFrame({'Xpro_CT1': balance_arr_2ct[:, 0],
-                        'Xpro_CT2': balance_arr_2ct[:, 1],
-                        'RMSE': rmse_arr_2ct})
-q = sns.scatterplot(data=prod_df, x='Xpro_CT1', y='Xpro_CT2',
-                    hue = 'RMSE', palette='Blues_d',#sizes=(50, 200),
-            # hue='N_produced', palette='crest',
-            edgecolor= 'face', alpha = 0.9, s=75)
-q.set_xscale('log')
-q.set_yscale('log')
-q.set_xlabel(r'$\chi_{production, CT1}$')
-q.set_ylabel(r'$\chi_{production, CT2}$')
-q.axhline(y=1, linestyle='dashed', c='tab:green')
-# q.text(0.9, 0.38, r'$y=1$', c='tab:green', transform=g.transAxes)
-q.axvline(x=1, linestyle='dashed', c='tab:green')
-# q.text(0.68, 0.87, r'$x=1$', c='tab:green', rotation='vertical', transform=g.transAxes)
+# prod_df = pd.DataFrame({'Xpro_CT1': balance_arr_nct[:, 0],
+#                         'Xpro_CT2': balance_arr_nct[:, 1],
+#                         'RMSE': rmse_arr_nct})
+prod_df = pd.DataFrame(balance_arr_nct, columns=np.arange(1, n_ct+1)).join(pd.Series(rmse_arr_nct, name='RMSE')).melt(id_vars='RMSE', value_name='Balance', var_name='N_CT')
 
-# prod_df = pd.DataFrame({'Celltype': np.array([np.ones_like(rmse_arr_2ct), np.ones_like(rmse_arr_2ct)+1]).ravel().astype(int),
-#                    'X_pro': np.concatenate([balance_arr_2ct[:, 0], balance_arr_2ct[:, 1]]),
-#                    'RMSE': np.concatenate([rmse_arr_2ct, rmse_arr_2ct])})
+q = sns.scatterplot(data=prod_df, x='Balance', y='RMSE',
+                    hue = 'N_CT', palette='flare',#sizes=(50, 200),
+            # hue='N_produced', palette='crest',
+            edgecolor= 'face', alpha = 0.8, s=75)
+q.set_xscale('log')
+q.axvspan(xmin=0.1, xmax=1, alpha=0.2, color='tab:green')
+# q.set_yscale('log')
+q.set_xlabel(r'$\chi_{production}$')
+q.set_ylabel('RMSE')
+# q.axhline(y=1, linestyle='dashed', c='tab:green')
+# # q.text(0.9, 0.38, r'$y=1$', c='tab:green', transform=g.transAxes)
+# q.axvline(x=1, linestyle='dashed', c='tab:green')
+# # q.text(0.68, 0.87, r'$x=1$', c='tab:green', rotation='vertical', transform=g.transAxes)
+
+# prod_df = pd.DataFrame({'Celltype': np.array([np.ones_like(rmse_arr_nct), np.ones_like(rmse_arr_nct)+1]).ravel().astype(int),
+#                    'X_pro': np.concatenate([balance_arr_nct[:, 0], balance_arr_nct[:, 1]]),
+#                    'RMSE': np.concatenate([rmse_arr_nct, rmse_arr_nct])})
 
 
 # q = sns.lineplot(data=prod_df, x='X_pro', y='RMSE',
@@ -590,19 +611,24 @@ else:
     plt.show()
 
 # %%
-figsave_flag = 1
+figsave_flag = 0
 
-f, ax = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(7.5, 3.5))
+f, ax = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(8.5, 3.5))
 
-rmse_diff = rmse_arr_1ct - rmse_arr_2ct
+rmse_diff = rmse_arr_1ct - rmse_arr_nct
 i_min_diff = np.where(rmse_diff == rmse_diff.min(), True, False)
 i_max_diff = np.where(rmse_diff == rmse_diff.max(), True, False)
 
 #### Minimum difference
 colors = np.where(production_ct_arr_1ct[i_min_diff]==1, 'b', 
-                  np.where(production_ct_arr_1ct[i_min_diff]==2, 'g', 'm'))
+                  np.where(production_ct_arr_1ct[i_min_diff]==2, 'g',
+                           np.where(production_ct_arr_1ct[i_min_diff]==3, 'm',
+                                    np.where(production_ct_arr_1ct[i_min_diff]==4, 'orange', 'cyan'))))
 labels = np.where(production_ct_arr_1ct[i_min_diff]==1, 'CT1', 
-                  np.where(production_ct_arr_1ct[i_min_diff]==2, 'CT2', 'CT3'))
+                  np.where(production_ct_arr_1ct[i_min_diff]==2, 'CT2',
+                           np.where(production_ct_arr_1ct[i_min_diff]==3, 'CT3',
+                                    np.where(production_ct_arr_1ct[i_min_diff]==4, 'CT4', 'CT5'))))
+
 ax[0].scatter(np.log10(ec_pred_arr_1ct[i_min_diff][index_arr_1ct[i_min_diff]]), 
                 np.log10(ec_real[index_arr_1ct[i_min_diff][0]]),
             c=colors[index_arr_1ct[i_min_diff]],#'tab:blue',
@@ -610,41 +636,49 @@ ax[0].scatter(np.log10(ec_pred_arr_1ct[i_min_diff][index_arr_1ct[i_min_diff]]),
 ax[0].axline((-2, -2), (3, 3), c='k', ls='--')
 ax[0].set_title(r'$N_{CT} = 1$')
 ax[0].text(0.05, 0.9, f'RMSE = {rmse_arr_1ct[i_min_diff][0]:.2f}', transform=ax[0].transAxes)
-ax[0].text(0.05, 0.8, str(balance_arr_1ct[i_min_diff][0].round(decimals=2)), transform=ax[0].transAxes)
+# ax[0].text(0.05, 0.8, str(balance_arr_1ct[i_min_diff][0].round(decimals=2)), transform=ax[0].transAxes)
 
-colors = np.where(production_ct_arr_2ct[i_min_diff]==1, 'b', 
-                  np.where(production_ct_arr_2ct[i_min_diff]==2, 'g', 'm'))
-labels = np.where(production_ct_arr_2ct[i_min_diff]==1, 'CT1', 
-                  np.where(production_ct_arr_2ct[i_min_diff]==2, 'CT2', 'CT3'))
-# con_index_ct1 = np.where(consumption_ct_arr_2ct[i_min_diff]==0, True, False)[0]*index_arr_2ct[i_min_diff]
-# con_index_ct2 = np.where(consumption_ct_arr_2ct[i_min_diff]==1, True, False)[0]*index_arr_2ct[i_min_diff]
-ax[1].scatter(np.log10(ec_pred_arr_2ct[i_min_diff][index_arr_2ct[i_min_diff]]), 
-                np.log10(ec_real[index_arr_2ct[i_min_diff][0]]),
-            c=colors[index_arr_2ct[i_min_diff]], marker='o',
+colors = np.where(production_ct_arr_nct[i_min_diff]==1, 'b', 
+                  np.where(production_ct_arr_nct[i_min_diff]==2, 'g',
+                           np.where(production_ct_arr_nct[i_min_diff]==3, 'm',
+                                    np.where(production_ct_arr_nct[i_min_diff]==4, 'saddlebrown', 'cyan'))))
+labels = np.where(production_ct_arr_nct[i_min_diff]==1, 'CT1', 
+                  np.where(production_ct_arr_nct[i_min_diff]==2, 'CT2',
+                           np.where(production_ct_arr_nct[i_min_diff]==3, 'CT3',
+                                    np.where(production_ct_arr_nct[i_min_diff]==4, 'CT4', 'CT5'))))
+
+# con_index_ct1 = np.where(consumption_ct_arr_nct[i_min_diff]==0, True, False)[0]*index_arr_nct[i_min_diff]
+# con_index_ct2 = np.where(consumption_ct_arr_nct[i_min_diff]==1, True, False)[0]*index_arr_nct[i_min_diff]
+ax[1].scatter(np.log10(ec_pred_arr_nct[i_min_diff][index_arr_nct[i_min_diff]]), 
+                np.log10(ec_real[index_arr_nct[i_min_diff][0]]),
+            c=colors[index_arr_nct[i_min_diff]], marker='o',
             alpha=0.6, edgecolor='face')
 
 ax[1].axline((-2, -2), (3, 3), c='k', ls='--')
 ax[1].set_title(r'Worst of $N_{CT} = $'+str(n_ct))
-ax[1].text(0.4, 0.9, f'RMSE = {rmse_arr_2ct[i_min_diff][0]:.2f}', transform=ax[1].transAxes)
-ax[1].text(0.4, 0.8, str(balance_arr_2ct[i_min_diff][0].round(decimals=2).tolist()), transform=ax[1].transAxes)
+ax[1].text(0.5, 0.9, f'RMSE = {rmse_arr_nct[i_min_diff][0]:.2f}', transform=ax[1].transAxes)
+# ax[1].text(0.4, 0.8, str(balance_arr_nct[i_min_diff][0].round(decimals=2).tolist()), transform=ax[1].transAxes)
 # ax[0, 1].text(1.02, 0.45, 'Worst', transform=ax[0, 1].transAxes, rotation=270)
 
 #### Maximum difference
-
-colors = np.where(production_ct_arr_2ct[i_max_diff]==1, 'b', 
-                  np.where(production_ct_arr_2ct[i_max_diff]==2, 'g', 'm'))
-labels = np.where(production_ct_arr_1ct[i_max_diff]==1, 'CT1', 
-                  np.where(production_ct_arr_2ct[i_max_diff]==2, 'CT2', 'CT3'))
-# con_index_ct1 = np.where(consumption_ct_arr_2ct[i_max_diff]==0, True, False)[0]*index_arr_2ct[i_max_diff]
-# con_index_ct2 = np.where(consumption_ct_arr_2ct[i_max_diff]==1, True, False)[0]*index_arr_2ct[i_max_diff]
-ax[2].scatter(np.log10(ec_pred_arr_2ct[i_max_diff][index_arr_2ct[i_max_diff]]), 
-                np.log10(ec_real[index_arr_2ct[i_max_diff][0]]),
-            c=colors[index_arr_2ct[i_max_diff]], marker='o',
+colors = np.where(production_ct_arr_nct[i_max_diff]==1, 'b', 
+                  np.where(production_ct_arr_nct[i_max_diff]==2, 'g',
+                           np.where(production_ct_arr_nct[i_max_diff]==3, 'm',
+                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'saddlebrown', 'cyan'))))
+labels = np.where(production_ct_arr_nct[i_max_diff]==1, 'CT1', 
+                  np.where(production_ct_arr_nct[i_max_diff]==2, 'CT2',
+                           np.where(production_ct_arr_nct[i_max_diff]==3, 'CT3',
+                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'CT4', 'CT5'))))
+# con_index_ct1 = np.where(consumption_ct_arr_nct[i_max_diff]==0, True, False)[0]*index_arr_nct[i_max_diff]
+# con_index_ct2 = np.where(consumption_ct_arr_nct[i_max_diff]==1, True, False)[0]*index_arr_nct[i_max_diff]
+ax[2].scatter(np.log10(ec_pred_arr_nct[i_max_diff][index_arr_nct[i_max_diff]]), 
+                np.log10(ec_real[index_arr_nct[i_max_diff][0]]),
+            c=colors[index_arr_nct[i_max_diff]], marker='o',
             alpha=0.6, edgecolor='face')
 
 ax[2].axline((-2, -2), (3, 3), c='k', ls='--')
-ax[2].text(0.4, 0.2, f'RMSE = {rmse_arr_2ct[i_max_diff][0]:.2f}', transform=ax[2].transAxes)
-ax[2].text(0.4, 0.1, str(balance_arr_2ct[i_max_diff][0].round(decimals=2).tolist()), transform=ax[2].transAxes)
+ax[2].text(0.6, 0.1, f'RMSE = {rmse_arr_nct[i_max_diff][0]:.2f}', transform=ax[2].transAxes)
+# ax[2].text(0.4, 0.1, str(balance_arr_nct[i_max_diff][0].round(decimals=2).tolist()), transform=ax[2].transAxes)
 ax[2].set_title(r'Best of $N_{CT} = $'+str(n_ct))
 # ax[2].text(1.02, 0.45, 'Best', transform=ax[2].transAxes, rotation=270)
 

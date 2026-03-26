@@ -39,10 +39,10 @@ plt.rc('text')
 Figure 1 has been generated using a self-contained script called cancer-power-law.py that includes all the data filtering, calculations and plotting.
 """
 # %%
-#### Figure 2: Single cell type model predictions-error reduction and number of metabolites predicted non-trivially
+#### Figure 2: Balanced production in one vs two celltypes, without learning
 #### Data import
 cl='A549-ATCC'
-pickle_path = '../raw-output/2-celltypes/optim-net/balance-partition/'+cl
+pickle_path = pickle_path = '../raw-output/2-celltypes/no-learn-balanced-net/'+cl
 reward = 0.1
 penalty = 0.1
 
