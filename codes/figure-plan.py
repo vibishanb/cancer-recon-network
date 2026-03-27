@@ -21,6 +21,7 @@ from matplotlib.ticker import MaxNLocator
 
 import pickle
 import os
+from tqdm import tqdm
 
 SMALL_SIZE = 15
 MEDIUM_SIZE = 17
@@ -41,218 +42,263 @@ Figure 1 has been generated using a self-contained script called cancer-power-la
 # %%
 #### Figure 2: Balanced production in one vs two celltypes, without learning
 #### Data import
-cl='A549-ATCC'
-n_ct = 6
-pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
-# reward = 0.1
-# penalty = 0.1
+# cl='A549-ATCC'
+# n_ct = 2
+for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
+    for cl in tqdm(sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3'], desc='Cell line: '):
+        pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
+        # reward = 0.1
+        # penalty = 0.1
 
-# [x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, n_pred_list, residual_list, balance_flag_list,
-#              metabolome_pred_before_list, metabolome_meas_before_list,
-#              metabolome_pred_after_list, metabolome_meas_after_list,
-#              valid_index_before_list, valid_index_after_list] = pd.read_pickle(pickle_path + '/reward-'+str(reward)+'-penalty-'+str(penalty)+'-optimised_network_output.pickle')
+        # [x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, n_pred_list, residual_list, balance_flag_list,
+        #              metabolome_pred_before_list, metabolome_meas_before_list,
+        #              metabolome_pred_after_list, metabolome_meas_after_list,
+        #              valid_index_before_list, valid_index_after_list] = pd.read_pickle(pickle_path + '/reward-'+str(reward)+'-penalty-'+str(penalty)+'-optimised_network_output.pickle')
 
-[balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
-                    rmse_arr_1ct, rmse_arr_nct,
-                    ec_pred_arr_1ct, ec_pred_arr_nct,
-                    index_arr_1ct, index_arr_nct,
-                    production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
-n_reps = len(balance_flag_arr)
-n_rand = 100
-npro = 115
+        [balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
+                            rmse_arr_1ct, rmse_arr_nct,
+                            ec_pred_arr_1ct, ec_pred_arr_nct,
+                            index_arr_1ct, index_arr_nct,
+                            production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
+        n_reps = len(balance_flag_arr)
+        n_rand = 100
+        npro = 115
 
-home_dir = os.getcwd()
-celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/1-cells-data.pickle')
-slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
-i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_lines))[0]
-ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
-ec_real = ec_metabolome.loc[:, cl].values
+        home_dir = os.getcwd()
+        celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/1-cells-data.pickle')
+        slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
+        i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_lines))[0]
+        ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
+        ec_real = ec_metabolome.loc[:, cl].values
 
 
-# max_links = int(len(x_ori_list[0].flatten())/2)
+        # max_links = int(len(x_ori_list[0].flatten())/2)
+
+        net_state = 'no-learn-balanced-net/'
+        figsave_flag = 1
+        fig_path = '../figures/'+str(n_ct)+'-celltypes/'+net_state+cl
+        try:
+            os.makedirs(fig_path)
+        except:
+            pass
+
+        df = pd.DataFrame({'Replicate': np.concatenate([np.arange(1, n_rand+1), np.arange(1, n_rand+1)]),
+                        'N_CT': np.array([np.ones_like(rmse_arr_1ct), np.zeros_like(rmse_arr_1ct)+n_ct]).ravel().astype(int),
+                        'Balance': np.concatenate([balance_flag_arr, balance_flag_arr]),
+                        'X_pro': np.concatenate([balance_arr_1ct, balance_arr_nct[:, 1]]),
+                        'RMSE': np.concatenate([rmse_arr_1ct, rmse_arr_nct])})
+
+        g = sns.lineplot(data=df, x='N_CT', y='RMSE',
+                        units='Replicate', hue='Balance',
+                        palette='coolwarm_r', hue_norm=(0, 1),
+                        dashes=False, estimator=None, zorder=1, legend=True)
+        g = sns.scatterplot(data=df, x='N_CT', y='RMSE',
+                            hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
+                            edgecolor='face', alpha=0.8, zorder=2, legend=False)
+        g.set_xlabel(r'$N_{CT}$')
+        g.set(xlim=(0.5, n_ct+0.5), xticks=[1, n_ct])
+
+        if figsave_flag:
+            g.figure.savefig(fig_path+'/balance-pairwise-comparison-npro-'+str(npro)+'.png', dpi=300, bbox_inches='tight')
+            plt.close(g.figure)
+        else:
+            plt.show()
+
+        h = sns.boxplot(data=df, x='Balance', y='RMSE',
+                        hue='N_CT', palette='crest')
+        h.set_xlabel('Balance state')
+        h.set(xlim=(-0.75, 1.75), xticks=[0, 1], xticklabels=['False', 'True'])
+        h.get_legend().set_title(r'$N_{CT}$')
+        if figsave_flag:
+            h.figure.savefig(fig_path+'/balance-comparison-boxplot-npro-'+str(npro)+'.png', dpi=300, bbox_inches='tight')
+            plt.close(h.figure)
+        else:
+            plt.show()
+
+
+        if n_ct == 2:
+            prod_df = pd.DataFrame({'Xpro_CT1': balance_arr_nct[:, 0],
+                                    'Xpro_CT2': balance_arr_nct[:, 1],
+                                    'RMSE': rmse_arr_nct})
+            q = sns.scatterplot(data=prod_df, x='Xpro_CT1', y='Xpro_CT2',
+                                hue = 'RMSE', palette='flare',#sizes=(50, 200),
+                        # hue='N_produced', palette='crest',
+                        edgecolor= 'face', alpha = 0.8, s=75)
+            q.set_xscale('log')
+            q.set_yscale('log')
+            q.set_xlabel(r'$\chi_{production, CT1}$')
+            q.set_ylabel(r'$\chi_{production, CT2}$')
+            q.axvspan(xmin=0.1, xmax=1, alpha=0.2, color='tab:green')
+            q.axhspan(ymin=0.1, ymax=1, alpha=0.2, color='tab:green')
+            # q.axhline(y=1, linestyle='dashed', c='tab:green')
+            # q.text(0.9, 0.38, r'$y=1$', c='tab:green', transform=g.transAxes)
+            # q.axvline(x=1, linestyle='dashed', c='tab:green')
+            # q.text(0.68, 0.87, r'$x=1$', c='tab:green', rotation='vertical', transform=g.transAxes)
+
+        else:
+            prod_df = pd.DataFrame(balance_arr_nct, columns=np.arange(1, n_ct+1)).join(pd.Series(rmse_arr_nct, name='RMSE')).melt(id_vars='RMSE', value_name='Balance', var_name='N_CT')
+
+            q = sns.scatterplot(data=prod_df, x='Balance', y='RMSE',
+                                hue = 'N_CT', palette='flare',#sizes=(50, 200),
+                        # hue='N_produced', palette='crest',
+                        edgecolor= 'face', alpha = 0.8, s=75)
+            q.set_xscale('log')
+            q.axvspan(xmin=0.1, xmax=1, alpha=0.2, color='tab:green')
+            # q.set_yscale('log')
+            q.set_xlabel(r'$\chi_{production}$')
+            q.set_ylabel('RMSE')
+
+
+
+        # prod_df = pd.DataFrame({'Celltype': np.array([np.ones_like(rmse_arr_nct), np.ones_like(rmse_arr_nct)+1]).ravel().astype(int),
+        #                    'X_pro': np.concatenate([balance_arr_nct[:, 0], balance_arr_nct[:, 1]]),
+        #                    'RMSE': np.concatenate([rmse_arr_nct, rmse_arr_nct])})
+
+
+        # q = sns.lineplot(data=prod_df, x='X_pro', y='RMSE',
+        #                     hue='Celltype', palette=['b', 'g'], lw=3)
+        # q.set_xscale('log')
+        # q.set_xlabel(r'$\chi_{production}$', fontsize=17)
+        # q.set_ylabel(r'RMSE')
+
+
+        if figsave_flag:
+            q.figure.savefig(fig_path+'/balance-and-rmse-lineplot-npro-'+str(npro)+'.png', dpi=300, bbox_inches='tight')
+            plt.close(q.figure)
+        else:
+            plt.show()
+
+
+        f, ax = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(8.5, 3.5))
+
+        rmse_diff = rmse_arr_1ct - rmse_arr_nct
+        i_min_diff = np.where(rmse_diff == rmse_diff.min(), True, False)
+        i_max_diff = np.where(rmse_diff == rmse_diff.max(), True, False)
+
+        #### Minimum difference
+        colors = np.where(production_ct_arr_1ct[i_min_diff]==1, 'b', 
+                        np.where(production_ct_arr_1ct[i_min_diff]==2, 'g',
+                                np.where(production_ct_arr_1ct[i_min_diff]==3, 'm',
+                                            np.where(production_ct_arr_1ct[i_min_diff]==4, 'saddlebrown',
+                                                    np.where(production_ct_arr_1ct[i_min_diff]==5, 'cyan', 'teal')))))
+        labels = np.where(production_ct_arr_1ct[i_min_diff]==1, 'CT1', 
+                        np.where(production_ct_arr_1ct[i_min_diff]==2, 'CT2',
+                                np.where(production_ct_arr_1ct[i_min_diff]==3, 'CT3',
+                                            np.where(production_ct_arr_1ct[i_min_diff]==4, 'CT4',
+                                                    np.where(production_ct_arr_1ct[i_min_diff]==5, 'CT5', 'CT6')))))
+
+        ax[0].scatter(np.log10(ec_pred_arr_1ct[i_min_diff][index_arr_1ct[i_min_diff]]), 
+                        np.log10(ec_real[index_arr_1ct[i_min_diff][0]]),
+                    c=colors[index_arr_1ct[i_min_diff]],#'tab:blue',
+                    alpha=0.6, edgecolor='face')
+        ax[0].axline((-2, -2), (3, 3), c='k', ls='--')
+        ax[0].set_title(r'$N_{CT} = 1$')
+        ax[0].text(0.05, 0.9, f'RMSE = {rmse_arr_1ct[i_min_diff][0]:.2f}', transform=ax[0].transAxes)
+
+        colors = np.where(production_ct_arr_nct[i_min_diff]==1, 'b', 
+                        np.where(production_ct_arr_nct[i_min_diff]==2, 'g',
+                                np.where(production_ct_arr_nct[i_min_diff]==3, 'm',
+                                            np.where(production_ct_arr_nct[i_min_diff]==4, 'saddlebrown',
+                                                    np.where(production_ct_arr_nct[i_min_diff]==5, 'cyan', 'black')))))
+        labels = np.where(production_ct_arr_nct[i_min_diff]==1, 'CT1', 
+                        np.where(production_ct_arr_nct[i_min_diff]==2, 'CT2',
+                                np.where(production_ct_arr_nct[i_min_diff]==3, 'CT3',
+                                            np.where(production_ct_arr_nct[i_min_diff]==4, 'CT4',
+                                                    np.where(production_ct_arr_nct[i_min_diff]==5, 'CT5', 'CT6')))))
+        ax[1].scatter(np.log10(ec_pred_arr_nct[i_min_diff][index_arr_nct[i_min_diff]]), 
+                        np.log10(ec_real[index_arr_nct[i_min_diff][0]]),
+                    c=colors[index_arr_nct[i_min_diff]], marker='o',
+                    alpha=0.6, edgecolor='face')
+
+        ax[1].axline((-2, -2), (3, 3), c='k', ls='--')
+        ax[1].set_title(r'Worst of $N_{CT} = $'+str(n_ct))
+        ax[1].text(0.5, 0.9, f'RMSE = {rmse_arr_nct[i_min_diff][0]:.2f}', transform=ax[1].transAxes)
+
+        #### Maximum difference
+        colors = np.where(production_ct_arr_nct[i_max_diff]==1, 'b', 
+                        np.where(production_ct_arr_nct[i_max_diff]==2, 'g',
+                                np.where(production_ct_arr_nct[i_max_diff]==3, 'm',
+                                            np.where(production_ct_arr_nct[i_max_diff]==4, 'saddlebrown',
+                                                    np.where(production_ct_arr_nct[i_max_diff]==5, 'cyan', 'black')))))
+        labels = np.where(production_ct_arr_nct[i_max_diff]==1, 'CT1', 
+                        np.where(production_ct_arr_nct[i_max_diff]==2, 'CT2',
+                                np.where(production_ct_arr_nct[i_max_diff]==3, 'CT3',
+                                            np.where(production_ct_arr_nct[i_max_diff]==4, 'CT4',
+                                                    np.where(production_ct_arr_nct[i_max_diff]==5, 'CT5', 'CT6')))))
+        ax[2].scatter(np.log10(ec_pred_arr_nct[i_max_diff][index_arr_nct[i_max_diff]]), 
+                        np.log10(ec_real[index_arr_nct[i_max_diff][0]]),
+                    c=colors[index_arr_nct[i_max_diff]], marker='o',
+                    alpha=0.6, edgecolor='face')
+
+        ax[2].axline((-2, -2), (3, 3), c='k', ls='--')
+        ax[2].text(0.6, 0.1, f'RMSE = {rmse_arr_nct[i_max_diff][0]:.2f}', transform=ax[2].transAxes)
+        ax[2].set_title(r'Best of $N_{CT} = $'+str(n_ct))
+
+        f.supxlabel(r'$log_{10}\ Predicted\ metabolome$', fontsize=15)
+        f.supylabel(r'$log_{10}\ Empirical\ metabolome$', fontsize=15)
+        f.tight_layout()
+
+        if figsave_flag:
+            f.figure.savefig(fig_path+'/metabolome-prediction-comparison-npro-'+str(npro)+'.png', dpi=300, bbox_inches='tight')
+            plt.close(f.figure)
+        else:
+            plt.show()
 
 # %%
-net_state = 'no-learn-balanced-net/'
 figsave_flag = 1
-fig_path = '../figures/'+str(n_ct)+'-celltypes/'+net_state
-try:
-    os.makedirs(fig_path)
-except:
-    pass
+rmse_arr_heatmap = [[]]
+num_final_heatmap = [[]]
 
-df = pd.DataFrame({'Replicate': np.concatenate([np.arange(1, n_rand+1), np.arange(1, n_rand+1)]),
-                   'N_CT': np.array([np.ones_like(rmse_arr_1ct), np.zeros_like(rmse_arr_1ct)+n_ct]).ravel().astype(int),
-                   'Balance': np.concatenate([balance_flag_arr, balance_flag_arr]),
-                   'X_pro': np.concatenate([balance_arr_1ct, balance_arr_nct[:, 1]]),
-                   'RMSE': np.concatenate([rmse_arr_1ct, rmse_arr_nct])})
+for cl in sublinear_cell_lines:
+    rmse = []
+    num_final = []
+    for n_ct in range(2, 7):
+        # cl='A549-ATCC'
+        pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
 
-g = sns.lineplot(data=df, x='N_CT', y='RMSE',
-                units='Replicate', hue='Balance',
-                palette='coolwarm_r', hue_norm=(0, 1),
-                dashes=False, estimator=None, zorder=1, legend=True)
-g = sns.scatterplot(data=df, x='N_CT', y='RMSE',
-                    hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
-                    edgecolor='face', alpha=0.8, zorder=2, legend=False)
-g.set_xlabel(r'$N_{CT}$')
-g.set(xlim=(0.5, n_ct+0.5), xticks=[1, n_ct])
+        [balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
+                            rmse_arr_1ct, rmse_arr_nct,
+                            ec_pred_arr_1ct, ec_pred_arr_nct,
+                            index_arr_1ct, index_arr_nct,
+                            production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
+        rmse.append(rmse_arr_nct[balance_flag_arr].mean())
+        num_final.append(balance_flag_arr.sum())
+    rmse_arr_heatmap.append(rmse)
+    num_final_heatmap.append(num_final)
 
-if figsave_flag:
-    g.figure.savefig(fig_path+'/balance-pairwise-comparison-npro-'+str(npro)+'.png', dpi=300)
-    plt.close(g.figure)
-else:
-    plt.show()
+rmse_arr_heatmap = np.array(rmse_arr_heatmap[1:])
+num_final_heatmap = np.array(num_final_heatmap[1:])
 
-h = sns.boxplot(data=df, x='Balance', y='RMSE',
-                hue='N_CT', palette='crest')
-h.set_xlabel('Balance state')
-h.set(xlim=(-0.75, 1.75), xticks=[0, 1], xticklabels=['False', 'True'])
-h.get_legend().set_title(r'$N_{CT}$')
-if figsave_flag:
-    h.figure.savefig(fig_path+'/balance-comparison-boxplot-npro-'+str(npro)+'.png', dpi=300)
-    plt.close(h.figure)
-else:
-    plt.show()
+heatmap_df = pd.DataFrame(rmse_arr_heatmap,
+                          columns=np.arange(2, 7),
+                          index=sublinear_cell_lines)
 
-# prod_df = pd.DataFrame({'Xpro_CT1': balance_arr_nct[:, 0],
-#                         'Xpro_CT2': balance_arr_nct[:, 1],
-#                         'RMSE': rmse_arr_nct})
-prod_df = pd.DataFrame(balance_arr_nct, columns=np.arange(1, n_ct+1)).join(pd.Series(rmse_arr_nct, name='RMSE')).melt(id_vars='RMSE', value_name='Balance', var_name='N_CT')
-
-q = sns.scatterplot(data=prod_df, x='Balance', y='RMSE',
-                    hue = 'N_CT', palette='flare',#sizes=(50, 200),
-            # hue='N_produced', palette='crest',
-            edgecolor= 'face', alpha = 0.8, s=75)
-q.set_xscale('log')
-q.axvspan(xmin=0.1, xmax=1, alpha=0.2, color='tab:green')
-# q.set_yscale('log')
-q.set_xlabel(r'$\chi_{production}$')
-q.set_ylabel('RMSE')
-# q.axhline(y=1, linestyle='dashed', c='tab:green')
-# # q.text(0.9, 0.38, r'$y=1$', c='tab:green', transform=g.transAxes)
-# q.axvline(x=1, linestyle='dashed', c='tab:green')
-# # q.text(0.68, 0.87, r'$x=1$', c='tab:green', rotation='vertical', transform=g.transAxes)
-
-# prod_df = pd.DataFrame({'Celltype': np.array([np.ones_like(rmse_arr_nct), np.ones_like(rmse_arr_nct)+1]).ravel().astype(int),
-#                    'X_pro': np.concatenate([balance_arr_nct[:, 0], balance_arr_nct[:, 1]]),
-#                    'RMSE': np.concatenate([rmse_arr_nct, rmse_arr_nct])})
-
-
-# q = sns.lineplot(data=prod_df, x='X_pro', y='RMSE',
-#                     hue='Celltype', palette=['b', 'g'], lw=3)
-# q.set_xscale('log')
-# q.set_xlabel(r'$\chi_{production}$', fontsize=17)
-# q.set_ylabel(r'RMSE')
+f, ax = plt.subplots(1, 1, figsize=(7.5, 15))
+ax = sns.heatmap(data=heatmap_df, cmap='crest',
+            annot=num_final_heatmap.tolist())
+ax.set_xlabel(r'$N_{CT}$')
+ax.set_ylabel('Cell line')
+ax.set_title(r'RMSE vs $N_{CT}$')
 
 
 if figsave_flag:
-    q.figure.savefig(fig_path+'/balance-and-rmse-lineplot-npro-'+str(npro)+'.png', dpi=300)
-    plt.close(q.figure)
-else:
-    plt.show()
-
-
-f, ax = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(8.5, 3.5))
-
-rmse_diff = rmse_arr_1ct - rmse_arr_nct
-i_min_diff = np.where(rmse_diff == rmse_diff.min(), True, False)
-i_max_diff = np.where(rmse_diff == rmse_diff.max(), True, False)
-
-#### Minimum difference
-colors = np.where(production_ct_arr_1ct[i_min_diff]==1, 'b', 
-                  np.where(production_ct_arr_1ct[i_min_diff]==2, 'g',
-                           np.where(production_ct_arr_1ct[i_min_diff]==3, 'm',
-                                    np.where(production_ct_arr_1ct[i_min_diff]==4, 'saddlebrown',
-                                             np.where(production_ct_arr_1ct[i_min_diff]==5, 'cyan', 'teal')))))
-labels = np.where(production_ct_arr_1ct[i_min_diff]==1, 'CT1', 
-                  np.where(production_ct_arr_1ct[i_min_diff]==2, 'CT2',
-                           np.where(production_ct_arr_1ct[i_min_diff]==3, 'CT3',
-                                    np.where(production_ct_arr_1ct[i_min_diff]==4, 'CT4',
-                                             np.where(production_ct_arr_1ct[i_min_diff]==5, 'CT5', 'CT6')))))
-
-ax[0].scatter(np.log10(ec_pred_arr_1ct[i_min_diff][index_arr_1ct[i_min_diff]]), 
-                np.log10(ec_real[index_arr_1ct[i_min_diff][0]]),
-            c=colors[index_arr_1ct[i_min_diff]],#'tab:blue',
-            alpha=0.6, edgecolor='face')
-ax[0].axline((-2, -2), (3, 3), c='k', ls='--')
-ax[0].set_title(r'$N_{CT} = 1$')
-ax[0].text(0.05, 0.9, f'RMSE = {rmse_arr_1ct[i_min_diff][0]:.2f}', transform=ax[0].transAxes)
-
-colors = np.where(production_ct_arr_nct[i_min_diff]==1, 'b', 
-                  np.where(production_ct_arr_nct[i_min_diff]==2, 'g',
-                           np.where(production_ct_arr_nct[i_min_diff]==3, 'm',
-                                    np.where(production_ct_arr_nct[i_min_diff]==4, 'saddlebrown',
-                                             np.where(production_ct_arr_nct[i_min_diff]==5, 'cyan', 'black')))))
-labels = np.where(production_ct_arr_nct[i_min_diff]==1, 'CT1', 
-                  np.where(production_ct_arr_nct[i_min_diff]==2, 'CT2',
-                           np.where(production_ct_arr_nct[i_min_diff]==3, 'CT3',
-                                    np.where(production_ct_arr_nct[i_min_diff]==4, 'CT4',
-                                             np.where(production_ct_arr_nct[i_min_diff]==5, 'CT5', 'CT6')))))
-ax[1].scatter(np.log10(ec_pred_arr_nct[i_min_diff][index_arr_nct[i_min_diff]]), 
-                np.log10(ec_real[index_arr_nct[i_min_diff][0]]),
-            c=colors[index_arr_nct[i_min_diff]], marker='o',
-            alpha=0.6, edgecolor='face')
-
-ax[1].axline((-2, -2), (3, 3), c='k', ls='--')
-ax[1].set_title(r'Worst of $N_{CT} = $'+str(n_ct))
-ax[1].text(0.5, 0.9, f'RMSE = {rmse_arr_nct[i_min_diff][0]:.2f}', transform=ax[1].transAxes)
-
-#### Maximum difference
-colors = np.where(production_ct_arr_nct[i_max_diff]==1, 'b', 
-                  np.where(production_ct_arr_nct[i_max_diff]==2, 'g',
-                           np.where(production_ct_arr_nct[i_max_diff]==3, 'm',
-                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'saddlebrown',
-                                             np.where(production_ct_arr_nct[i_max_diff]==5, 'cyan', 'black')))))
-labels = np.where(production_ct_arr_nct[i_max_diff]==1, 'CT1', 
-                  np.where(production_ct_arr_nct[i_max_diff]==2, 'CT2',
-                           np.where(production_ct_arr_nct[i_max_diff]==3, 'CT3',
-                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'CT4',
-                                             np.where(production_ct_arr_nct[i_max_diff]==5, 'CT5', 'CT6')))))
-ax[2].scatter(np.log10(ec_pred_arr_nct[i_max_diff][index_arr_nct[i_max_diff]]), 
-                np.log10(ec_real[index_arr_nct[i_max_diff][0]]),
-            c=colors[index_arr_nct[i_max_diff]], marker='o',
-            alpha=0.6, edgecolor='face')
-
-ax[2].axline((-2, -2), (3, 3), c='k', ls='--')
-ax[2].text(0.6, 0.1, f'RMSE = {rmse_arr_nct[i_max_diff][0]:.2f}', transform=ax[2].transAxes)
-ax[2].set_title(r'Best of $N_{CT} = $'+str(n_ct))
-
-f.supxlabel(r'$log_{10}\ Predicted\ metabolome$', fontsize=15)
-f.supylabel(r'$log_{10}\ Empirical\ metabolome$', fontsize=15)
-f.tight_layout()
-
-if figsave_flag:
-    f.figure.savefig(fig_path+'/metabolome-prediction-comparison-npro-'+str(npro)+'.png', dpi=300)
+    f.figure.savefig('../figures/no-learn-rmse-vs-nct-heatmap.png', dpi=300, bbox_inches='tight')
     plt.close(f.figure)
 else:
     plt.show()
 
-# %%
-rmse_arr_heatmap = [[]]
-num_final_heatmap = [[]]
-rmse = []
-num_final = []
-for n_ct in range(2, 7):
-    cl='A549-ATCC'
-    pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
-
-    [balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
-                        rmse_arr_1ct, rmse_arr_nct,
-                        ec_pred_arr_1ct, ec_pred_arr_nct,
-                        index_arr_1ct, index_arr_nct,
-                        production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
-    rmse.append(rmse_arr_nct[balance_flag_arr].mean())
-    num_final.append(balance_flag_arr.sum())
-rmse_arr_heatmap.append(rmse)
-num_final_heatmap.append(num_final)
-
-rmse_arr_heatmap = np.array(rmse_arr_heatmap[1:]).flatten()
-num_final_heatmap = np.array(num_final_heatmap[1:]).flatten()
-
-heatmap_df = pd.DataFrame({cl: rmse_arr_heatmap}, index=np.arange(2, 7)).T
-sns.heatmap(data=heatmap_df, cmap='crest',
-            annot=num_final_heatmap.reshape(1, -1))
-
-sns.boxplot(data=heatmap_df)
+with sns.axes_style("darkgrid"):
+    g = sns.boxplot(data=heatmap_df, palette='crest')
+    g.set_xlabel(r'$N_{CT}$')
+    g.set_ylabel('RMSE')
+    g.set_title('Random networks w/o learning', pad=12)
+    g.spines.top.set_visible(False)
+    g.spines.right.set_visible(False)
+if figsave_flag:
+    g.figure.savefig('../figures/no-learn-rmse-vs-nct-boxplot.png', dpi=300, bbox_inches='tight')
+    plt.close(g.figure)
+else:
+    plt.show()
 
 
 # %%

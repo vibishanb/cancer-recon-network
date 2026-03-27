@@ -1062,14 +1062,13 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
     # n_ct = 1
     # all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
     # i_selfish = 0
-    balance_arr_1ct, balance_arr_2ct, balance_flag_list, all_networks, rmse_arr_1ct, rmse_arr_2ct = pd.read_pickle(home_dir + '/2-celltype-balanced-networks.pickle')
 
     # pickle_in = open("data.pickle","rb")
     celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-data.pickle')
     cell_line_names = ec_metabolome.columns.to_numpy()
 
     slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
-    nets_temp = all_networks.copy()
+    # nets_temp = all_networks.copy()
 
     ### Filtering those networks for cell lines with power law slopes
     i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_lines))[0]
@@ -1077,6 +1076,15 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
     # for i in i_sublinear:
     #     all_networks.append(nets_temp[i])
     ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
+
+    cl = sublinear_cell_lines[0]
+    pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
+    [balance_arr_1ct, balance_arr_nct, balance_flag_list, balanced_networks_list,
+                            rmse_arr_1ct, rmse_arr_nct,
+                            ec_pred_arr_1ct, ec_pred_arr_nct,
+                            index_arr_1ct, index_arr_nct,
+                            production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
+    all_networks = balanced_networks_list.copy()
 
     ######## Diet as the average of all the Baseline values
     diet = met_baseline.mean(axis=1)
@@ -1202,7 +1210,7 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
 # %%
 ##### Visualising output
 net_state = 'optim-net/'
-figsave_flag = True
+figsave_flag = 1
 fig_path = '../figures/2-celltypes/'+net_state+cl
 try:
     os.makedirs(fig_path)
