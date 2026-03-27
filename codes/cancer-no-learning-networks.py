@@ -271,13 +271,13 @@ cellnum_init_all = cellnum_init_all[i_sublinear]
 cellnum_final_all = cellnum_final_all[i_sublinear]
 
 net_state = 'no-learn-balanced-net/'
-for n_ct in np.arange(6, 7):
+for n_ct in tqdm(np.arange(3, 7), desc='N_CT: '):
 
     n_rand = 100
     n_reps = 150
     # npro_arr = np.repeat(np.array([50])[np.newaxis, :], n_reps*2, axis=1).ravel()
     # nct_arr = np.repeat(np.array([[1]*n_reps, [2]*n_reps]).ravel()[np.newaxis, :], 1, axis=0).ravel()
-    for j in tqdm(range(len(i_sublinear[:1])), desc='Cell line: '):
+    for j in tqdm(range(len(i_sublinear)), desc='Cell line: '):
         rmse_arr_1ct, rmse_arr_nct = [], []
         balance_flag_arr = []
         balance_arr_1ct, balance_arr_nct = [], [[]]
