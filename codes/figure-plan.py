@@ -244,6 +244,54 @@ for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
         else:
             plt.show()
 
+#### Pooled pair plots
+rmse_pooled_1ct, rmse_pooled_nct, balance_flag_pooled, rep_num = [[]], [[]], [[]], [[]]
+slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
+for cl in sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3']:
+    pickle_path = '../raw-output/2-celltypes/no-learn-balanced-net/'+cl
+
+    [balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
+                        rmse_arr_1ct, rmse_arr_nct,
+                        ec_pred_arr_1ct, ec_pred_arr_nct,
+                        index_arr_1ct, index_arr_nct,
+                        production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
+    rmse_pooled_1ct.append(rmse_arr_1ct)
+    rmse_pooled_nct.append(rmse_arr_nct)
+    balance_flag_pooled.append(balance_flag_arr)
+    rep_num.append(np.arange(1, len(rmse_arr_1ct)+1))
+
+rmse_pooled_1ct = np.array(rmse_pooled_1ct[1:])
+rmse_pooled_nct = np.array(rmse_pooled_nct[1:])
+balance_flag_pooled = np.array(balance_flag_pooled[1:])
+rep_num = np.array(rep_num[1:])
+
+n_rand = len(rmse_arr_1ct)
+df_pooled = pd.DataFrame({'Replicate': np.concatenate([np.arange(1, 3001), np.arange(1, 3001)]).ravel(),
+                'N_CT': np.array([np.ones_like(rmse_pooled_1ct), np.zeros_like(rmse_pooled_1ct)+2]).ravel().astype(int),
+                'Balance': np.concatenate([balance_flag_pooled, balance_flag_pooled]).ravel(),
+                'RMSE': np.concatenate([rmse_pooled_1ct, rmse_pooled_nct]).ravel()})
+
+g, ax = plt.subplots(1, 1, figsize = (3, 5))
+ax = sns.lineplot(data=df_pooled, x='N_CT', y='RMSE',
+                units='Replicate', hue='Balance',
+                palette='coolwarm_r', hue_norm=(0, 1),
+                dashes=False, estimator=None, zorder=1, legend=True)
+ax = sns.scatterplot(data=df_pooled, x='N_CT', y='RMSE',
+                    hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
+                    edgecolor='face', alpha=0.8, zorder=2, legend=False)
+ax.set_xlabel(r'$N_{CT}$')
+ax.set(xlim=(0.5, 2.5), xticks=[1, 2])
+ax.get_legend().set_title('Balance')
+
+net_state = 'no-learn-balanced-net/'
+figsave_flag = 1
+fig_path = '../figures/2-celltypes/'+net_state
+if figsave_flag:
+    g.figure.savefig(fig_path+'/balance-rmse-comparison-all-cell-lines-pooled.png', dpi=300, bbox_inches='tight')
+    plt.close(g.figure)
+else:
+    plt.show()
+
 # %%
 figsave_flag = 1
 rmse_arr_heatmap = [[]]
@@ -274,8 +322,7 @@ heatmap_df = pd.DataFrame(rmse_arr_heatmap,
                           index=sublinear_cell_lines)
 
 f, ax = plt.subplots(1, 1, figsize=(7.5, 15))
-ax = sns.heatmap(data=heatmap_df, cmap='crest',
-            annot=num_final_heatmap.tolist())
+ax = sns.heatmap(data=heatmap_df, cmap='crest')
 ax.set_xlabel(r'$N_{CT}$')
 ax.set_ylabel('Cell line')
 ax.set_title(r'RMSE vs $N_{CT}$')
@@ -288,14 +335,14 @@ else:
     plt.show()
 
 with sns.axes_style("darkgrid"):
-    g = sns.boxplot(data=heatmap_df, palette='crest')
+    g = sns.lineplot(data=heatmap_df.T, palette='Blues_d', legend=False)
     g.set_xlabel(r'$N_{CT}$')
     g.set_ylabel('RMSE')
     g.set_title('Random networks w/o learning', pad=12)
     g.spines.top.set_visible(False)
     g.spines.right.set_visible(False)
 if figsave_flag:
-    g.figure.savefig('../figures/no-learn-rmse-vs-nct-boxplot.png', dpi=300, bbox_inches='tight')
+    g.figure.savefig('../figures/no-learn-rmse-vs-nct-lineplot.png', dpi=300, bbox_inches='tight')
     plt.close(g.figure)
 else:
     plt.show()
