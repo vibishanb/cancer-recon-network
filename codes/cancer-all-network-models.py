@@ -528,12 +528,12 @@ def run_network_optimisation(all_params):
 
     # Network optimisation begins here
     kT = all_params[9]
-    Twindow = 750
+    Twindow = 500
     # numStepsNotAdded = 0
     # numAdditions = 0
     # numDeletions = 0
     error_window = []
-    for i in range(30000):
+    for i in range(10000):
 
         error_window.append(error_before)
         x_previous = x.copy()
@@ -1057,7 +1057,8 @@ plt.savefig(fig_path + '/sensitivity-penalty-cross-reward-npred.png', dpi=300)
 # %%
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
-for n_ct in tqdm(range(2, 3), desc='n_ct'):
+
+for n_ct in tqdm(range(2, 7), desc='n_ct'):
     home_dir = os.getcwd() #+ '/codes'
     # n_ct = 1
     # all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
@@ -1078,13 +1079,6 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
     ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
 
     cl = sublinear_cell_lines[0]
-    pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
-    [balance_arr_1ct, balance_arr_nct, balance_flag_list, balanced_networks_list,
-                            rmse_arr_1ct, rmse_arr_nct,
-                            ec_pred_arr_1ct, ec_pred_arr_nct,
-                            index_arr_1ct, index_arr_nct,
-                            production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
-    all_networks = balanced_networks_list.copy()
 
     ######## Diet as the average of all the Baseline values
     diet = met_baseline.mean(axis=1)
@@ -1104,20 +1098,28 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
     cellnum_init_all = cellnum_init_all[i_sublinear]
     cellnum_final_all = cellnum_final_all[i_sublinear]
 
-    i_nonzero_celltypes = all_networks[0]['celltypes'].unique()
-    i_nonzero_celltypes = np.sort(i_nonzero_celltypes)
-    i_nonzero_celltypes = celltype_ID.values.copy()
-    i_nonzero_metabolites = all_networks[0]['metabolites'].unique()
-
-    MAX_ID_celltypes = len(i_nonzero_celltypes)  # MAX_ID_celltypes is the maximum of ID labels for celltypes.
-    MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
-
     cell_line_names = ec_metabolome.columns.to_numpy()
-    for i_cell_line in tqdm(range(len(cell_line_names[:1])), desc='Cell lines'):
+    for i_cell_line in tqdm(range(len(sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3'])), desc='Cell lines: ', leave=False):
         # i_cell_line = np.where(cell_line_names == 'A549-ATCC')[0][0]
         cl = cell_line_names[i_cell_line]
         f = 0.5
         ec_real = ec_metabolome.loc[:, cl].values
+
+        pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
+        [balance_arr_1ct, balance_arr_nct, balance_flag_list, balanced_networks_list,
+                            rmse_arr_1ct, rmse_arr_nct,
+                            ec_pred_arr_1ct, ec_pred_arr_nct,
+                            index_arr_1ct, index_arr_nct,
+                            production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
+        all_networks = balanced_networks_list.copy()
+
+        i_nonzero_celltypes = all_networks[0]['celltypes'].unique()
+        i_nonzero_celltypes = np.sort(i_nonzero_celltypes)
+        i_nonzero_celltypes = celltype_ID.values.copy()
+        i_nonzero_metabolites = all_networks[0]['metabolites'].unique()
+
+        MAX_ID_celltypes = len(i_nonzero_celltypes)  # MAX_ID_celltypes is the maximum of ID labels for celltypes.
+        MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
 
         cellnum_init = cellnum_init_all[i_cell_line]
         cellnum_final = cellnum_final_all[i_cell_line]
@@ -1146,11 +1148,6 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
 
             n_reps = len(all_networks)
             for i in np.arange(n_reps):
-                # net_raw = generate_random_network(all_networks[i_cell_line], bias)
-                # net_raw_balanced, balance_flag = generate_balance_part_network(all_networks[i_cell_line], bias, ec_real)
-                # balance_flag_list.append(balance_flag)
-
-                # net_ori, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_networks[i])
                 all_params = np.array([f, cl,
                         cellnum_init, cellnum_final,
                         all_networks[i], diet, in_degree_flag,
@@ -1173,11 +1170,6 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
                 valid_index_before_list.append(i_list[0])
                 valid_index_after_list.append(i_list[-1])
 
-                # print('Round', i+1, ', initial rmse is', log_bias[0])
-                # print('Network optmisation ended with final rmse', log_bias[-1])
-                # print(n_pred[0], 'metabolites predicted initially and', n_pred[-1], 'after optimisation')
-                # print('------------------')
-
             x_ori_list = np.array(x_ori_list[1:])
             x_optim_list = np.array(x_optim_list[1:])
             error_plot_list = np.array(error_list_all_reps[1:], dtype=object)
@@ -1192,7 +1184,7 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
             valid_index_before_list = np.array(valid_index_before_list[1:], dtype=object)
             valid_index_after_list = np.array(valid_index_after_list[1:], dtype=object)
 
-            net_state = 'optim-net/balance-partition/'
+            net_state = 'optim-net/'
             pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/'+net_state+cl
             try:
                 os.makedirs(pickle_path)
@@ -1210,7 +1202,7 @@ for n_ct in tqdm(range(2, 3), desc='n_ct'):
 # %%
 ##### Visualising output
 net_state = 'optim-net/'
-figsave_flag = 1
+figsave_flag = 0
 fig_path = '../figures/2-celltypes/'+net_state+cl
 try:
     os.makedirs(fig_path)
@@ -1263,19 +1255,6 @@ ax3.xaxis.set_major_locator(MaxNLocator(integer=True))
 # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
 ax3.set_xlabel('# metabolites predicted')
 ax3.set_ylabel('Final RMSE')
-
-# for i in range(n_reps):
-#     sns.lineplot(log_bias_list[i], ax=ax[1, 1])
-# ax[1, 1].set_xlabel("Add/remove steps")
-# ax[1, 1].set_ylabel("Met_RMSE")
-# ax[1, 1].set_title("%d replicate runs" % n_reps)
-# sns.regplot(x=initial_error, y=sim_length, color='k', ax = ax[1, 1],
-#             line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
-# rsq, pval = pearsonr(initial_error, sim_length)
-# ax[1, 1].text(0.05, 0.9, f'$r^2$ = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax[1, 1].transAxes)
-# # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
-# ax[1, 1].set_xlabel('Initial prediction error')
-# ax[1, 1].set_ylabel('Step number')
 
 fig.suptitle(f'Network optimisation for {cl} with reward {reward_arr[0]}')
 fig.tight_layout()
