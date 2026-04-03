@@ -13,12 +13,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.gridspec import GridSpec
+from matplotlib.collections import LineCollection
 from scipy.sparse import csr_matrix
 import pickle
 from scipy.optimize import minimize
 from scipy.stats import pearsonr, spearmanr
 import networkx as nx
 from multiprocessing import Pool
+import warnings
 
 import os
 import numpy.matlib
@@ -29,7 +31,7 @@ from tqdm import tqdm
 ############ Figure size settings
 SMALL_SIZE = 12
 MEDIUM_SIZE = 15
-BIGGER_SIZE = 15
+BIGGER_SIZE = 17
 
 plt.rc('font', size=SMALL_SIZE, family='sans-serif', serif='Arial')          # controls default text sizes
 plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
@@ -396,6 +398,17 @@ def pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, col_name, 
 
     residual_new = np.abs(balance - 1).sum() # This residual term will be zero when the balance lies within the (0.1, 1) range for all celltypes
     
+    ## Overlap calculation
+    prod_links = x[max_links:].reshape(MAX_ID_celltypes, -1)
+    overlap_list = np.array([prod_links[:, i].sum() for i in range(MAX_ID_metabolites)])
+    num_prod_overlap = len(overlap_list[overlap_list > 1])
+    
+    ## Consumption overlap
+    con_links = x[:max_links].reshape(MAX_ID_celltypes, -1)
+    overlap_list = np.array([con_links[:, i].sum() for i in range(MAX_ID_metabolites)])
+    num_con_overlap = len(overlap_list[overlap_list > 1])
+
+
     # # ## Strict interconversion
     # # n_inter = np.isin(i_produced, i_consumed).sum()
     # # n_non_inter = (~np.isin(i_produced, i_consumed)).sum()
@@ -408,7 +421,7 @@ def pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, col_name, 
     pred_errorTotal = mean_error - np.where(n_pred_new > n_pred_init, reward_param, -penalty_param) #+ np.where(residual_new != 0, penalty_param * np.log10(residual_new), 0) #np.where(residual_init > residual_new, penalty_param, -reward_param) #- (inter_diff*reward_param) + (non_inter_diff*penalty_param)
     # + (penalty_param * n_non_inter) - (reward_param * n_inter)
     
-    return [pred_errorTotal, metabolome_pred, metabolome_measured, i_final, bias_metabolome, mean_error, mean_error_combined, n_pred_new, residual_new]
+    return [pred_errorTotal, metabolome_pred, metabolome_measured, i_final, bias_metabolome, mean_error, mean_error_combined, n_pred_new, residual_new, num_prod_overlap, num_con_overlap]
 
 def calculate_priors(bias_metabolome, prod_celltypes):
     # Prior probability is simply a rescaled value of the bias for each metabolite; cell type frequency not included here because there is no reference "measured" value unlike the metabolite levels
@@ -451,10 +464,6 @@ def run_network_optimisation(all_params):
     MAX_ID_celltypes = all_params[8]
     
     error_list = []
-    # current_step_list = []
-    # pos_x_list = []
-    # metID_list = []
-    # celltypeID_list = []
     prior_list = []
     log_bias_list = []
     log_bias_combined_list = []
@@ -463,6 +472,8 @@ def run_network_optimisation(all_params):
     valid_index_list = []
     n_pred_list = []
     residual_list = []
+    con_overlap_list, prod_overlap_list = [], []
+    
 
     ct0 = cellnum_init*celltypefreq.to_numpy()
 
@@ -474,7 +485,7 @@ def run_network_optimisation(all_params):
     m2b_ori = (m2b!=0).astype(int).copy()
     b2m_ori = (b2m!=0).astype(int).copy()
     x_ori = np.concatenate([m2b_ori.flatten(), b2m_ori.flatten()]) # This is the adjacency matrix
-    # fun = lambda x: pred_error_addingLinks(x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final)
+    
     ##### How many metabolites predicted non-trivially in the initial network
     metabolome_measured = ec_metabolome.loc[:, cl].values
     i_nonzero = np.where(met_pred * metabolome_measured, True, False)
@@ -495,15 +506,9 @@ def run_network_optimisation(all_params):
         net_consumption = diet.values[i_consumed].sum()
         net_production = metabolome_measured[i_produced].sum()
         balance[i] = net_production/net_consumption
-
-        # ## Strict interconversion
-        # n_tot = len(i_consumed) + len(i_produced)
-        # n_inter += np.intersect1d(i_consumed, i_produced).shape[0]#np.isin(i_produced, i_consumed).sum()
-        # n_non_inter += n_tot - n_inter #(~np.isin(i_produced, i_consumed)).sum()
-
     residual_init = np.abs(balance - 1).sum() # This residual term will be zero when the balance becomes 1 for all celltypes
 
-    error_before, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias_init, log_bias_combined_init, n_pred, residual_init = pred_error_addingLinks(n_pred_init, residual_init, x_ori, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params)
+    error_before, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias_init, log_bias_combined_init, n_pred, residual_init, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x_ori, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params)
     metabolome_pred_list.append(metabolome_pred)
     metabolome_measured_list.append(metabolome_measured)
     valid_index_list.append(i_final)
@@ -511,8 +516,9 @@ def run_network_optimisation(all_params):
     log_bias_combined_list.append(log_bias_combined_init)
     n_pred_list.append(n_pred)
     residual_list.append(residual_init)
-    # n_pred_before = len(np.where(metabolome_pred_before > 0)[0])
     bias_metabolome_ori = bias_metabolome.copy()
+    prod_overlap_list.append(num_prod_overlap)
+    con_overlap_list.append(num_con_overlap)
 
     ## Partitioning of the metabolome based on number of celltypes assumed; The array prod_celltype is a vector that codes which celltype is assumed to produce each metabolite under partition.
     quantiles = np.quantile(metabolome_measured, np.linspace(0, 1, MAX_ID_celltypes+1)[1:-1])
@@ -529,9 +535,6 @@ def run_network_optimisation(all_params):
     # Network optimisation begins here
     kT = all_params[9]
     Twindow = 500
-    # numStepsNotAdded = 0
-    # numAdditions = 0
-    # numDeletions = 0
     error_window = []
     for i in range(10000):
 
@@ -546,20 +549,12 @@ def run_network_optimisation(all_params):
         else:
             continue
 
-        error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, log_bias_combined, n_pred, residual_after = pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
+        error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, log_bias_combined, n_pred, residual_after, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
         prior_prob = calculate_priors(bias_metabolome, prod_celltypes)
 
         if (n_pred >= 3) * (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
             error_before = error_after
-            # if x[i_x] == 1:
-            #     # print('Addition accepted, error is ', error_before)
-            #     numAdditions += 1
-            # else:
-            #     # print('Deletion accepted, error is ', error_before)
-            #     numDeletions += 1 
             error_list.append(error_before)
-            # current_step_list.append(i)
-            # pos_x_list.append(i_x) # Record every link whose status has changed in the adjacency matrix
             prior_list.append(prior_prob[i_x])
             log_bias_list.append(log_bias)
             log_bias_combined_list.append(log_bias_combined)
@@ -568,32 +563,20 @@ def run_network_optimisation(all_params):
             valid_index_list.append(i_final)
             n_pred_list.append(n_pred)
             residual_list.append(residual_after)
+            prod_overlap_list.append(num_prod_overlap)
+            con_overlap_list.append(num_con_overlap)
             n_pred_init = n_pred
             residual_init = residual_after.copy()
-            # x_previous = x.copy()
 
-            # if i_x < max_links:
-            #     row_num = i_x // m2b_ori.shape[1]
-            #     col_num = i_x - row_num * m2b_ori.shape[1]
-            # elif i_x >= max_links:
-            #     i_x = i_x - m2b_ori.shape[0] * m2b_ori.shape[1]
-            #     row_num = i_x // b2m_ori.shape[1]
-            #     col_num = i_x - row_num * b2m_ori.shape[1]
-            # metID_list.append(row_num)
-            # celltypeID_list.append(col_num)
-            # numStepsNotAdded = 0
         else:  ## not accepted   
             x[i_x] = x_previous[i_x] # Maintain the previous state
-            # numStepsNotAdded += 1
             n_pred_init = n_pred
             residual_init = residual_after.copy()
-            # x_previous = x.copy()
 
         if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow)*kT)):
             break
-    # n_pred_after = len(np.where(metabolome_pred_list[-1] > 0)[0])
     
-    return [kT, pred_params['penalty'], pred_params['reward'], f, x_ori, x, error_list, n_pred_list, residual_list, metabolome_pred_list, metabolome_measured_list, valid_index_list, log_bias_list, log_bias_combined_list]#, consumption_added, production_added, consumption_deleted, production_deleted]
+    return [kT, pred_params['penalty'], pred_params['reward'], f, x_ori, x, error_list, n_pred_list, residual_list, prod_overlap_list, con_overlap_list, metabolome_pred_list, metabolome_measured_list, valid_index_list, log_bias_list, log_bias_combined_list]#, consumption_added, production_added, consumption_deleted, production_deleted]
 
 def net_from_x(x, MAX_ID_metabolites, MAX_ID_celltypes):
 
@@ -658,6 +641,7 @@ def plot_networks(net, df_summary, which_net, n_reps, fig_path, figsave_flag):
     if figsave_flag:
         fig.savefig(fig_path + '/' + which_net +'.png', dpi=300)
         plt.close(fig)
+
 
 # %%
 ###### Running sensitivity simulations for kT, penalty and reward for one cell line, for different numbers of celltypes
@@ -1058,7 +1042,7 @@ plt.savefig(fig_path + '/sensitivity-penalty-cross-reward-npred.png', dpi=300)
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
 
-for n_ct in tqdm(range(2, 7), desc='n_ct'):
+for n_ct in tqdm(range(4, 5), desc='n_ct'):
     home_dir = os.getcwd() #+ '/codes'
     # n_ct = 1
     # all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
@@ -1099,7 +1083,7 @@ for n_ct in tqdm(range(2, 7), desc='n_ct'):
     cellnum_final_all = cellnum_final_all[i_sublinear]
 
     cell_line_names = ec_metabolome.columns.to_numpy()
-    for i_cell_line in tqdm(range(len(sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3'])), desc='Cell lines: ', leave=False):
+    for i_cell_line in tqdm(range(len(sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3'][:1])), desc='Cell lines: ', leave=False):
         # i_cell_line = np.where(cell_line_names == 'A549-ATCC')[0][0]
         cl = cell_line_names[i_cell_line]
         f = 0.5
@@ -1125,8 +1109,8 @@ for n_ct in tqdm(range(2, 7), desc='n_ct'):
         cellnum_final = cellnum_final_all[i_cell_line]
         bias = np.log10(ec_metabolome.iloc[:, i_cell_line].values + 1e-6) - np.log10(diet.values + 1e-6)
 
-        reward_arr = np.array([0.1])
-        penalty_arr = np.array([0.1])
+        reward_arr = np.array([0.5])
+        penalty_arr = np.array([0.5])
 
         in_degree_flag = False
 
@@ -1144,6 +1128,7 @@ for n_ct in tqdm(range(2, 7), desc='n_ct'):
             valid_index_after_list = [[]]
             n_pred_list = [[]]
             residual_list = [[]]
+            prod_overlap_list, con_overlap_list = [[]], [[]]
             # balance_flag_list = []
 
             n_reps = len(all_networks)
@@ -1154,7 +1139,7 @@ for n_ct in tqdm(range(2, 7), desc='n_ct'):
                         MAX_ID_metabolites, MAX_ID_celltypes,
                         0.003, penalty_arr[k], reward_arr[k]], dtype=object)
 
-                kT, penalty, reward, f, x_ori, x, elist, n_pred, residual, met_pred_list, met_measured_list, i_list, bias, bias_combined = run_network_optimisation(all_params)
+                kT, penalty, reward, f, x_ori, x, elist, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias, bias_combined = run_network_optimisation(all_params)
 
                 x_ori_list.append(x_ori)
                 x_optim_list.append(x)
@@ -1163,6 +1148,8 @@ for n_ct in tqdm(range(2, 7), desc='n_ct'):
                 log_bias_combined_list.append(bias_combined)
                 n_pred_list.append(n_pred)
                 residual_list.append(residual)
+                prod_overlap_list.append(prod_overlap)
+                con_overlap_list.append(con_overlap)
                 metabolome_pred_before_list.append(met_pred_list[0])
                 metabolome_pred_after_list.append(met_pred_list[-1])
                 metabolome_meas_before_list.append(met_measured_list[0])
@@ -1177,6 +1164,7 @@ for n_ct in tqdm(range(2, 7), desc='n_ct'):
             log_bias_combined_list = np.array(log_bias_combined_list[1:], dtype=object)
             n_pred_list = np.array(n_pred_list[1:], dtype=object)
             residual_list = np.array(residual_list[1:], dtype=object)
+            prod_overlap_list, con_overlap_list = np.array(prod_overlap_list[1:], dtype=object), np.array(con_overlap_list[1:], dtype=object)
             metabolome_pred_before_list = np.array(metabolome_pred_before_list[1:], dtype=object)
             metabolome_pred_after_list = np.array(metabolome_pred_after_list[1:], dtype=object)
             metabolome_meas_before_list = np.array(metabolome_meas_before_list[1:], dtype=object)
@@ -1193,76 +1181,11 @@ for n_ct in tqdm(range(2, 7), desc='n_ct'):
 
             pickle_out = open(pickle_path + "/reward-"+str(all_params[-1])+"-penalty-"+str(all_params[-2])+"-optimised_network_output.pickle", "wb")
             #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
-            pickle.dump([x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, n_pred_list, residual_list, balance_flag_list,
+            pickle.dump([x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, n_pred_list, residual_list, balance_flag_list, prod_overlap_list, con_overlap_list,
                         metabolome_pred_before_list, metabolome_meas_before_list,
                         metabolome_pred_after_list, metabolome_meas_after_list,
                         valid_index_before_list, valid_index_after_list], pickle_out, protocol=2)
             pickle_out.close()
-
-# %%
-##### Visualising output
-net_state = 'optim-net/'
-figsave_flag = 0
-fig_path = '../figures/2-celltypes/'+net_state+cl
-try:
-    os.makedirs(fig_path)
-except:
-    pass
-
-##### I'm calling this the general summary, whatever that means
-# f, ax = plt.subplots(2, 2, figsize=(8, 5))
-fig = plt.figure(figsize=(9.5, 6))
-gs = GridSpec(2, 2, figure=fig)
-ax1 = fig.add_subplot(gs[:, 0])
-ax2 = fig.add_subplot(gs[0, 1])
-ax3 = fig.add_subplot(gs[1, 1])
-
-#### A quick glance of where sims have begun and ended
-colors = np.where(balance_flag_list, 'b', 'tab:red')
-for i in range(n_reps):
-    sns.lineplot(log_bias_list[i], ax=ax1, color=colors[i])
-ax1.set_xlabel("Add/remove steps")
-ax1.set_ylabel("RMSE")
-ax1.set_title("%d replicate runs" % n_reps)
-
-
-#### Pairwise comparison of combined vs uncombined network predictions
-final_error = np.array([arr[-1] for arr in log_bias_list])
-final_error_combined = np.array([arr[-1] for arr in log_bias_combined_list])
-df = pd.DataFrame({'N_CT': np.concatenate([np.ones_like(final_error), np.ones_like(final_error)+1]).astype(int),
-                    'Replicate': np.concatenate([np.arange(1, 1+n_reps), np.arange(1, 1+n_reps)]),
-                    'Balance': np.concatenate([balance_flag_list, balance_flag_list]),
-                    'RMSE': np.concatenate([final_error_combined, final_error])})
-sns.lineplot(data=df, x='N_CT', y='RMSE',
-            units='Replicate',
-            hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
-            dashes=False, estimator=None, ax=ax2, legend=True)
-sns.scatterplot(data=df, x='N_CT', y='RMSE',
-                hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
-                edgecolor='face', alpha=0.9, ax=ax2, legend=False)
-ax2.set_xlabel(r'$N_{CT}$')
-ax2.set(xlim=(0.5, 2.5), xticks=[1, 2])
-# ax2.get_legend().remove()
-
-#### More non-trivially predicted metabolites means more error?
-num_pred = np.array([arr[-1] for arr in n_pred_list])
-final_error = np.array([arr[-1] for arr in log_bias_list])
-sns.regplot(x=num_pred, y=final_error, color='k', ax = ax3,
-            line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
-rsq, pval = spearmanr(num_pred, final_error)
-ax3.text(0.05, 0.9, f'rho = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax3.transAxes)
-ax3.xaxis.set_major_locator(MaxNLocator(integer=True))
-# ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
-ax3.set_xlabel('# metabolites predicted')
-ax3.set_ylabel('Final RMSE')
-
-fig.suptitle(f'Network optimisation for {cl} with reward {reward_arr[0]}')
-fig.tight_layout()
-if figsave_flag:
-    fig.savefig(fig_path+'/with-balance-all-replicates-summary.png', dpi=300)
-    print("Figure saved at "+fig_path)
-    plt.close(fig)
-
 
 # %%
 ##### Check out the best performing network
@@ -1345,11 +1268,4 @@ if figsave_flag:
 else:
     plt.show()
 # plt.scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=4)
-
-    
-# %%
-df_summary = pd.concat([df_con_links, df_pro_links])
-
-plot_networks(net_ori, df_summary, 'original-net', n_reps, fig_path, figsave_flag)
-plot_networks(net_optim, df_summary, 'optimised-net', n_reps, fig_path, figsave_flag)
 
