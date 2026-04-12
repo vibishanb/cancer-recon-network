@@ -96,14 +96,41 @@ def colored_line(x, y, c, ax, **lc_kwargs):
 
     return ax.add_collection(lc)
 
+def calculate_overlap_stats(x, n_ct, max_links, met_ID):
+
+    x_consumption = x[:max_links]
+    x_production = x[max_links:]
+
+    ### Consumption overlap
+    con_index_overlap, con_mets_overlap = [[]], []
+    for i, arr in enumerate(x_consumption.reshape(n_ct, -1).T):
+        indices = np.where(arr == 1)[0]
+        if len(indices) > 1:
+            con_index_overlap.append(indices+1)
+            con_mets_overlap.append(met_ID[i])
+    
+    ### Production overlap
+    pro_index_overlap, pro_mets_overlap = [[]], []
+    for i, arr in enumerate(x_production.reshape(n_ct, -1).T):
+        indices = np.where(arr == 1)[0]
+        if len(indices) > 1:
+            pro_index_overlap.append(indices+1)
+            pro_mets_overlap.append(met_ID[i])
+    
+    clist = ["+".join(map(str, ind.tolist())) for ind in con_index_overlap[1:]]
+    plist = ["+".join(map(str, ind.tolist())) for ind in pro_index_overlap[1:]]
+
+    return [clist, con_mets_overlap, plist, pro_mets_overlap]
+
 
 home_dir = os.getcwd()
 slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
 
 celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/1-cells-data.pickle')
 i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_lines))[0]
+# ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
+diet = met_baseline.mean(axis=1)
 ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
-
 
 """
 Figure 1 has been generated using a self-contained script called cancer-power-law.py that includes all the data filtering, calculations and plotting.
@@ -113,8 +140,8 @@ Figure 1 has been generated using a self-contained script called cancer-power-la
 #### Data import
 # cl='A549-ATCC'
 # n_ct = 2
-for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
-    for cl in tqdm(sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3'], desc='Cell line: '):
+for n_ct in tqdm(np.arange(2, 8), desc='N_CT: '):
+    for cl in tqdm(sublinear_cell_lines, desc='Cell line: '):
         pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
 
 
@@ -127,9 +154,6 @@ for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
         n_rand = 100
         npro = 115
         ec_real = ec_metabolome.loc[:, cl].values
-
-
-        # max_links = int(len(x_ori_list[0].flatten())/2)
 
         net_state = 'no-learn-balanced-net/'
         figsave_flag = 1
@@ -206,19 +230,6 @@ for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
             q.set_ylabel('RMSE')
 
 
-
-        # prod_df = pd.DataFrame({'Celltype': np.array([np.ones_like(rmse_arr_nct), np.ones_like(rmse_arr_nct)+1]).ravel().astype(int),
-        #                    'X_pro': np.concatenate([balance_arr_nct[:, 0], balance_arr_nct[:, 1]]),
-        #                    'RMSE': np.concatenate([rmse_arr_nct, rmse_arr_nct])})
-
-
-        # q = sns.lineplot(data=prod_df, x='X_pro', y='RMSE',
-        #                     hue='Celltype', palette=['b', 'g'], lw=3)
-        # q.set_xscale('log')
-        # q.set_xlabel(r'$\chi_{production}$', fontsize=17)
-        # q.set_ylabel(r'RMSE')
-
-
         if figsave_flag:
             q.figure.savefig(fig_path+'/balance-and-rmse-lineplot-npro-'+str(npro)+'.png', dpi=300, bbox_inches='tight')
             plt.close(q.figure)
@@ -235,14 +246,16 @@ for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
         #### Minimum difference
         colors = np.where(production_ct_arr_1ct[i_min_diff]==1, 'b', 
                         np.where(production_ct_arr_1ct[i_min_diff]==2, 'g',
-                                np.where(production_ct_arr_1ct[i_min_diff]==3, 'm',
+                                np.where(production_ct_arr_1ct[i_min_diff]==3, 'darkorchid',
                                             np.where(production_ct_arr_1ct[i_min_diff]==4, 'saddlebrown',
-                                                    np.where(production_ct_arr_1ct[i_min_diff]==5, 'cyan', 'teal')))))
+                                                    np.where(production_ct_arr_1ct[i_min_diff]==5, 'goldenrod',
+                                                             np.where(production_ct_arr_1ct[i_min_diff]==6, 'black', 'tab:pink'))))))
         labels = np.where(production_ct_arr_1ct[i_min_diff]==1, 'CT1', 
                         np.where(production_ct_arr_1ct[i_min_diff]==2, 'CT2',
                                 np.where(production_ct_arr_1ct[i_min_diff]==3, 'CT3',
                                             np.where(production_ct_arr_1ct[i_min_diff]==4, 'CT4',
-                                                    np.where(production_ct_arr_1ct[i_min_diff]==5, 'CT5', 'CT6')))))
+                                                    np.where(production_ct_arr_1ct[i_min_diff]==5, 'CT5',
+                                                             np.where(production_ct_arr_1ct[i_min_diff]==6, 'CT6', 'CT7'))))))
 
         ax[0].scatter(np.log10(ec_pred_arr_1ct[i_min_diff][index_arr_1ct[i_min_diff]]), 
                         np.log10(ec_real[index_arr_1ct[i_min_diff][0]]),
@@ -253,15 +266,18 @@ for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
         ax[0].text(0.05, 0.9, f'RMSE = {rmse_arr_1ct[i_min_diff][0]:.2f}', transform=ax[0].transAxes)
 
         colors = np.where(production_ct_arr_nct[i_min_diff]==1, 'b', 
-                        np.where(production_ct_arr_nct[i_min_diff]==2, 'g',
-                                np.where(production_ct_arr_nct[i_min_diff]==3, 'm',
-                                            np.where(production_ct_arr_nct[i_min_diff]==4, 'saddlebrown',
-                                                    np.where(production_ct_arr_nct[i_min_diff]==5, 'cyan', 'black')))))
+                np.where(production_ct_arr_nct[i_min_diff]==2, 'g',
+                        np.where(production_ct_arr_nct[i_min_diff]==3, 'darkorchid',
+                                    np.where(production_ct_arr_nct[i_min_diff]==4, 'saddlebrown',
+                                            np.where(production_ct_arr_nct[i_min_diff]==5, 'goldenrod',
+                                                        np.where(production_ct_arr_nct[i_min_diff]==6, 'black', 'tab:pink'))))))
         labels = np.where(production_ct_arr_nct[i_min_diff]==1, 'CT1', 
                         np.where(production_ct_arr_nct[i_min_diff]==2, 'CT2',
                                 np.where(production_ct_arr_nct[i_min_diff]==3, 'CT3',
                                             np.where(production_ct_arr_nct[i_min_diff]==4, 'CT4',
-                                                    np.where(production_ct_arr_nct[i_min_diff]==5, 'CT5', 'CT6')))))
+                                                    np.where(production_ct_arr_nct[i_min_diff]==5, 'CT5',
+                                                             np.where(production_ct_arr_nct[i_min_diff]==6, 'CT6', 'CT7'))))))
+        
         ax[1].scatter(np.log10(ec_pred_arr_nct[i_min_diff][index_arr_nct[i_min_diff]]), 
                         np.log10(ec_real[index_arr_nct[i_min_diff][0]]),
                     c=colors[index_arr_nct[i_min_diff]], marker='o',
@@ -273,15 +289,18 @@ for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
 
         #### Maximum difference
         colors = np.where(production_ct_arr_nct[i_max_diff]==1, 'b', 
-                        np.where(production_ct_arr_nct[i_max_diff]==2, 'g',
-                                np.where(production_ct_arr_nct[i_max_diff]==3, 'm',
-                                            np.where(production_ct_arr_nct[i_max_diff]==4, 'saddlebrown',
-                                                    np.where(production_ct_arr_nct[i_max_diff]==5, 'cyan', 'black')))))
+                np.where(production_ct_arr_nct[i_max_diff]==2, 'g',
+                        np.where(production_ct_arr_nct[i_max_diff]==3, 'darkorchid',
+                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'saddlebrown',
+                                            np.where(production_ct_arr_nct[i_max_diff]==5, 'goldenrod',
+                                                        np.where(production_ct_arr_nct[i_max_diff]==6, 'black', 'tab:pink'))))))
         labels = np.where(production_ct_arr_nct[i_max_diff]==1, 'CT1', 
                         np.where(production_ct_arr_nct[i_max_diff]==2, 'CT2',
                                 np.where(production_ct_arr_nct[i_max_diff]==3, 'CT3',
                                             np.where(production_ct_arr_nct[i_max_diff]==4, 'CT4',
-                                                    np.where(production_ct_arr_nct[i_max_diff]==5, 'CT5', 'CT6')))))
+                                                    np.where(production_ct_arr_nct[i_max_diff]==5, 'CT5',
+                                                             np.where(production_ct_arr_nct[i_max_diff]==6, 'CT6', 'CT7'))))))
+        
         ax[2].scatter(np.log10(ec_pred_arr_nct[i_max_diff][index_arr_nct[i_max_diff]]), 
                         np.log10(ec_real[index_arr_nct[i_max_diff][0]]),
                     c=colors[index_arr_nct[i_max_diff]], marker='o',
@@ -304,7 +323,7 @@ for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
 #### Pooled pair plots
 rmse_pooled_1ct, rmse_pooled_nct, balance_flag_pooled, rep_num = [[]], [[]], [[]], [[]]
 slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
-for cl in sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3']:
+for cl in sublinear_cell_lines:
     pickle_path = '../raw-output/2-celltypes/no-learn-balanced-net/'+cl
 
     [balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
@@ -323,7 +342,8 @@ balance_flag_pooled = np.array(balance_flag_pooled[1:])
 rep_num = np.array(rep_num[1:])
 
 n_rand = len(rmse_arr_1ct)
-df_pooled = pd.DataFrame({'Replicate': np.concatenate([np.arange(1, 3001), np.arange(1, 3001)]).ravel(),
+
+df_pooled = pd.DataFrame({'Replicate': np.concatenate([np.arange(1, 3101), np.arange(1, 3101)]).ravel(),
                 'N_CT': np.array([np.ones_like(rmse_pooled_1ct), np.zeros_like(rmse_pooled_1ct)+2]).ravel().astype(int),
                 'Balance': np.concatenate([balance_flag_pooled, balance_flag_pooled]).ravel(),
                 'RMSE': np.concatenate([rmse_pooled_1ct, rmse_pooled_nct]).ravel()})
@@ -355,11 +375,11 @@ figsave_flag = 1
 rmse_arr_heatmap = [[]]
 num_final_heatmap = [[]]
 
-for cl in sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3']:
+for cl in sublinear_cell_lines:
     rmse = []
     num_final = []
     ec_real = ec_metabolome.loc[:, cl].values
-    for n_ct in range(2, 7):
+    for n_ct in range(2, 8):
         # cl='A549-ATCC'
         pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
 
@@ -378,15 +398,18 @@ for cl in sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3']:
         i_max_diff = np.where(rmse_diff == rmse_diff.max(), True, False)
 
         colors = np.where(production_ct_arr_nct[i_max_diff]==1, 'b', 
-                        np.where(production_ct_arr_nct[i_max_diff]==2, 'g',
-                                np.where(production_ct_arr_nct[i_max_diff]==3, 'm',
-                                            np.where(production_ct_arr_nct[i_max_diff]==4, 'saddlebrown',
-                                                    np.where(production_ct_arr_nct[i_max_diff]==5, 'cyan', 'black')))))
+                np.where(production_ct_arr_nct[i_max_diff]==2, 'g',
+                        np.where(production_ct_arr_nct[i_max_diff]==3, 'darkorchid',
+                                    np.where(production_ct_arr_nct[i_max_diff]==4, 'saddlebrown',
+                                            np.where(production_ct_arr_nct[i_max_diff]==5, 'goldenrod',
+                                                        np.where(production_ct_arr_nct[i_max_diff]==6, 'black', 'tab:pink'))))))
         labels = np.where(production_ct_arr_nct[i_max_diff]==1, 'CT1', 
                         np.where(production_ct_arr_nct[i_max_diff]==2, 'CT2',
                                 np.where(production_ct_arr_nct[i_max_diff]==3, 'CT3',
                                             np.where(production_ct_arr_nct[i_max_diff]==4, 'CT4',
-                                                    np.where(production_ct_arr_nct[i_max_diff]==5, 'CT5', 'CT6')))))
+                                                    np.where(production_ct_arr_nct[i_max_diff]==5, 'CT5',
+                                                             np.where(production_ct_arr_nct[i_max_diff]==6, 'CT6', 'CT7'))))))
+        
         f = plt.scatter(np.log10(ec_pred_arr_nct[i_max_diff][index_arr_nct[i_max_diff]]), 
                                 np.log10(ec_real[index_arr_nct[i_max_diff][0]]),
                             c=colors[index_arr_nct[i_max_diff]], marker='o',
@@ -414,8 +437,8 @@ rmse_arr_heatmap = np.array(rmse_arr_heatmap[1:])
 num_final_heatmap = np.array(num_final_heatmap[1:])
 
 heatmap_df = pd.DataFrame(rmse_arr_heatmap,
-                          columns=np.arange(2, 7),
-                          index=sublinear_cell_lines[sublinear_cell_lines != 'OVCAR-3'])
+                          columns=np.arange(2, 8),
+                          index=sublinear_cell_lines)
 
 f, ax = plt.subplots(1, 1, figsize=(7.5, 15))
 ax = sns.heatmap(data=heatmap_df, cmap='crest')
@@ -423,7 +446,7 @@ ax.set_xlabel(r'$N_{CT}$')
 ax.set_ylabel('Cell line')
 ax.set_title(r'RMSE vs $N_{CT}$')
 
-figsave_flag=0
+figsave_flag=1
 if figsave_flag:
     f.figure.savefig('../figures/no-learn-rmse-vs-nct-heatmap.png', dpi=300, bbox_inches='tight')
     plt.close(f.figure)
@@ -435,8 +458,6 @@ with sns.axes_style("darkgrid"):
     g.set_xlabel(r'$N_{CT}$')
     g.set_ylabel('RMSE')
     g.set_title('Random networks w/o learning', pad=12)
-    g.spines.top.set_visible(False)
-    g.spines.right.set_visible(False)
 if figsave_flag:
     g.figure.savefig('../figures/no-learn-rmse-vs-nct-lineplot.png', dpi=300, bbox_inches='tight')
     plt.close(g.figure)
@@ -446,11 +467,14 @@ else:
 
 # %%
 ##### Figure 4
-
-for cl in sublinear_cell_lines[sublinear_cell_lines != 'OVACR-3'][:1]:
-        for n_ct in np.arange(4, 5):
+for k in tqdm(range(len(sublinear_cell_lines)), desc='Cell line: '):#np.arange(0, 1):
+        for n_ct in np.arange(3, 6):
+            figsave_flag = 1
             reward = 0.5
             penalty = 0.5
+            cl = sublinear_cell_lines[k]
+            ec_real = ec_metabolome.loc[:, cl]
+
             pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/optim-net/'+cl
 
             [x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, n_pred_list, residual_list, balance_flag_list, prod_overlap_list, con_overlap_list,
@@ -470,11 +494,11 @@ for cl in sublinear_cell_lines[sublinear_cell_lines != 'OVACR-3'][:1]:
             x_ori_best = x_ori_list[i_best_net].flatten()
             x_optim_best = x_optim_list[i_best_net].flatten()
 
-            fig = plt.figure(figsize=(9.5, 6))
+            fig = plt.figure(figsize=(9, 6))
             gs = GridSpec(2, 2, figure=fig)
             ax1 = fig.add_subplot(gs[:, 0])
             ax2 = fig.add_subplot(gs[0, 1])
-            ax3 = fig.add_subplot(gs[1, 1])
+            ax3 = fig.add_subplot(gs[1, 1], sharex=ax2)
 
             #### A quick glance of where sims have begun and ended
             # colors = np.where(balance_flag_list, 'b', 'tab:red')
@@ -498,41 +522,75 @@ for cl in sublinear_cell_lines[sublinear_cell_lines != 'OVACR-3'][:1]:
             ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
             ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-            #### Pairwise comparison of combined vs uncombined network predictions
-            final_error = np.array([arr[-1] for arr in log_bias_list])
-            final_error_combined = np.array([arr[-1] for arr in log_bias_combined_list])
-            df = pd.DataFrame({'N_CT': np.concatenate([np.ones_like(final_error), np.ones_like(final_error)+1]).astype(int),
-                                'Replicate': np.concatenate([np.arange(1, 1+n_reps), np.arange(1, 1+n_reps)]),
-                                'Balance': np.concatenate([balance_flag_list, balance_flag_list]),
-                                'RMSE': np.concatenate([final_error_combined, final_error])})
-            sns.lineplot(data=df, x='N_CT', y='RMSE',
-                        units='Replicate',
-                        hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
-                        dashes=False, estimator=None, ax=ax2, legend=True)
-            sns.scatterplot(data=df, x='N_CT', y='RMSE',
-                            hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
-                            edgecolor='face', alpha=0.9, ax=ax2, legend=False)
-            ax2.set_xlabel(r'$N_{CT}$')
-            ax2.set(xlim=(0.5, 2.5), xticks=[1, 2])
-            # ax2.get_legend().remove()
+            ##### Check out the best performing network
+            p_arr_ori = np.array([i*j for i, j in zip(x_ori_best[max_links:].reshape(n_ct, -1), np.arange(1, n_ct+1).tolist())]).sum(0)
+            p_arr_optim = np.array([i*j for i, j in zip(x_optim_best[max_links:].reshape(n_ct, -1), np.arange(1, n_ct+1).tolist())]).sum(0)
 
-            #### More non-trivially predicted metabolites means more error?
-            num_pred = np.array([arr[-1] for arr in n_pred_list])
-            final_error = np.array([arr[-1] for arr in log_bias_list])
-            sns.regplot(x=num_pred, y=final_error, color='k', ax = ax3,
-                        line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
-            rsq, pval = spearmanr(num_pred, final_error)
-            ax3.text(0.05, 0.9, f'rho = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax3.transAxes)
-            ax3.xaxis.set_major_locator(MaxNLocator(integer=True))
-            # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
-            ax3.set_xlabel('# metabolites predicted')
-            ax3.set_ylabel('Final RMSE')
+            met_pred_before = metabolome_pred_before_list[i_best_net][0].astype(np.float64)
+            met_pred_after = metabolome_pred_after_list[i_best_net][0].astype(np.float64)
 
-            fig.suptitle(f'Network optimisation for {cl} with reward {reward_arr[0]}')
-            fig.tight_layout()
+            met_meas_before = metabolome_meas_before_list[i_best_net][0].astype(np.float64)
+            met_meas_after = metabolome_meas_after_list[i_best_net][0].astype(np.float64)
+
+            i_before = valid_index_before_list[i_best_net][0].astype(bool)
+            i_after = valid_index_after_list[i_best_net][0].astype(bool)
+
+            c_before = np.where(p_arr_ori == 0, 'tab:gray', np.where(p_arr_ori == 1, 'b', 
+                                np.where(p_arr_ori == 2, 'g',
+                                        np.where(p_arr_ori == 3, 'darkorchid', 
+                                                np.where(p_arr_ori == 4, 'saddlebrown', 
+                                                        np.where(p_arr_ori == 5, 'goldenrod',
+                                                                    np.where(p_arr_ori == 6, 'black', 'tab:pink')))))))                     
+            # c_before = np.where(i_before, c_before, 'tab:gray')
+
+            c_after = np.where(p_arr_optim == 0, 'tab:gray', np.where(p_arr_optim == 1, 'b', 
+                                np.where(p_arr_optim == 2, 'g',
+                                        np.where(p_arr_optim == 3, 'darkorchid', 
+                                                np.where(p_arr_optim == 4, 'saddlebrown', 
+                                                        np.where(p_arr_optim == 5, 'goldenrod',
+                                                                    np.where(p_arr_optim == 6, 'black', 'tab:pink')))))))
+            # c_after = np.where(i_after, c_after, 'tab:gray')
+
+            ori_list = x_ori_best[max_links:].reshape(n_ct, -1)
+            overlap_colours_before = np.array([np.where(ori_list[:, i].sum() > 1, 'overlap', 'no') for i in range(115)])
+            c_before[overlap_colours_before == 'overlap'] = 'tab:red'
 
 
-            figsave_flag = 0
+            optim_list = x_optim_best[max_links:].reshape(n_ct, -1)
+            overlap_colours_after = np.array([np.where(optim_list[:, i].sum() > 1, 'overlap', 'no') for i in range(115)])
+            c_after[overlap_colours_after == 'overlap'] = 'tab:red'
+
+            a_before = np.where(i_before, 0.8, 0.1)
+            a_after = np.where(i_after, 0.8, 0.)
+            a_after[overlap_colours_after == 'no'] = 0.2
+            a_after[overlap_colours_after == 'overlap'] = 1
+
+            s_after = np.where(overlap_colours_after == 'overlap', 80, 40)
+
+            edgecolor_before = np.where(overlap_colours_before == 'overlap', 'k', c_before)
+            edgecolor_after = np.where(overlap_colours_after == 'overlap', 'k', c_after)
+
+            # fig, ax = plt.subplots(2, 1, sharex=True, figsize=(4, 7))
+            ax2.scatter(np.log10(met_pred_before), np.log10(met_meas_before), c=c_before, alpha=a_before, s=50, edgecolors=edgecolor_before)
+            ax2.axline((-2, -2), (3, 3), c='k', transform=ax2.transAxes)
+            ax2.text(1.02, 0.5, 'Original', size=SMALL_SIZE, rotation='vertical', va='center', transform=ax2.transAxes)
+            ax2.text(0.05, 0.8, r'$\chi_{excess}=$'+f'{init_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax2.transAxes)
+            # ax2.set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
+            ax2.set_ylabel(r'$log_{10}\ Data$', size=SMALL_SIZE)
+            ax2.text(0.05, 0.9, f'RMSE = {init_pred_error[i_best_net][0].round(decimals=3):.2f}', transform=ax2.transAxes)
+
+            ax3.scatter(np.log10(met_pred_after), np.log10(met_meas_after), c=c_after, alpha=a_after, s=s_after, edgecolors=edgecolor_after)
+            ax3.axline((-2, -2), (2, 2), c='k', transform=ax3.transAxes)
+            ax3.text(1.02, 0.5, 'Optimised', size=SMALL_SIZE, rotation='vertical', va='center', transform=ax3.transAxes)
+            ax3.text(0.05, 0.9, f'RMSE = {final_pred_error[i_best_net][0].round(decimals=3):.2f}', transform=ax3.transAxes)
+            ax3.text(0.05, 0.8, r'$\chi_{excess}=$'+f'{final_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax3.transAxes)
+            ax3.set_xlabel(r'$log_{10}\ Prediction$')
+            ax3.set_ylabel(r'$log_{10}\ Data$', size=SMALL_SIZE)
+
+            fig.suptitle(f'Network optimisation for {cl} with reward {reward}')
+            fig.tight_layout(pad=0.6)
+
+
             fig_path = '../figures/'+str(n_ct)+'-celltypes/optim-net/'+cl
             if figsave_flag:
                 try:
@@ -562,81 +620,180 @@ for cl in sublinear_cell_lines[sublinear_cell_lines != 'OVACR-3'][:1]:
                                        'Overlap': np.concatenate([num_con_overlap, num_prod_overlap]),
                                        'RMSE': np.concatenate([final_error, final_error])})
             with sns.axes_style('darkgrid'):
-                f = sns.lmplot(data=overlap_df, x='Overlap', y='RMSE', col='LinkType',
+                f = sns.lmplot(data=overlap_df, x='Overlap', y='RMSE', row='LinkType',
                            hue='Balance', palette={False: 'r', True: 'b'},
-                           line_kws={'linewidth': 2}, scatter_kws={'s': 10},
+                           line_kws={'linewidth': 2}, scatter_kws={'s': 15},
                            facet_kws=dict(sharex=False))
+                f.set_xlabels('')
+                f.figure.supxlabel('# overlapping metabolites', size=MEDIUM_SIZE)
+                # f.figure.tight_layout()
 
-            ##### Check out the best performing network
-            # pred_error_change = np.array([list[0]-list[-1] for list in log_bias_list])
-
-            p_arr_ori = np.array([i*j for i, j in zip(x_ori_best[max_links:].reshape(n_ct, -1), np.arange(1, n_ct+1).tolist())]).sum(0)
-            p_arr_optim = np.array([i*j for i, j in zip(x_optim_best[max_links:].reshape(n_ct, -1), np.arange(1, n_ct+1).tolist())]).sum(0)
-
-            met_pred_before = metabolome_pred_before_list[i_best_net][0].astype(np.float64)
-            met_pred_after = metabolome_pred_after_list[i_best_net][0].astype(np.float64)
-
-            met_meas_before = metabolome_meas_before_list[i_best_net][0].astype(np.float64)
-            met_meas_after = metabolome_meas_after_list[i_best_net][0].astype(np.float64)
-
-            i_before = valid_index_before_list[i_best_net][0].astype(bool)
-            i_after = valid_index_after_list[i_best_net][0].astype(bool)
-
-            c_before = np.where(p_arr_ori == 0, 'tab:gray', np.where(p_arr_ori == 1, 'b', 
-                                np.where(p_arr_ori == 2, 'g',
-                                        np.where(p_arr_ori == 3, 'm', 
-                                                np.where(p_arr_ori == 4, 'saddlebrown', 
-                                                        np.where(p_arr_ori == 5, 'cyan', 'black'))))))                     
-            # c_before = np.where(i_before, c_before, 'tab:gray')
-
-            c_after = np.where(p_arr_optim == 0, 'tab:gray', np.where(p_arr_optim == 1, 'b', 
-                                np.where(p_arr_optim == 2, 'g',
-                                        np.where(p_arr_optim == 3, 'm', 
-                                                np.where(p_arr_optim == 4, 'saddlebrown', 
-                                                        np.where(p_arr_optim == 5, 'cyan', 'black'))))))
-            # c_after = np.where(i_after, c_after, 'tab:gray')
-
-            ori_list = x_ori_best[max_links:].reshape(n_ct, -1)
-            overlap_colours_before = np.array([np.where(ori_list[:, i].sum() > 1, 'overlap', 'no') for i in range(115)])
-            c_before[overlap_colours_before == 'overlap'] = 'tab:red'
-
-
-            optim_list = x_optim_best[max_links:].reshape(n_ct, -1)
-            overlap_colours_after = np.array([np.where(optim_list[:, i].sum() > 1, 'overlap', 'no') for i in range(115)])
-            c_after[overlap_colours_after == 'overlap'] = 'tab:red'
-
-            a_before = np.where(i_before, 0.8, 0.25)
-            a_after = np.where(i_after, 0.8, 0.25)
-
-            fig, ax = plt.subplots(1, 2, sharey=True, figsize=(7, 4))
-            ax[0].scatter(np.log10(met_pred_before), np.log10(met_meas_before), c=c_before, alpha=a_before, s=50)
-            # ax[0].scatter(np.log10(metabolome_pred_old+1e-7), np.log10(metabolome_measured_old+1e-7), c='k', s=9)
-            ax[0].axline((-2, -2), (3, 3), c='k')
-            ax[0].set_title('Original network')
-            ax[0].text(0.05, 0.8, r'$\chi_{excess}=$'+f'{init_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax[0].transAxes)
-            # ax[0].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
-            ax[0].set_ylabel(r'$log_{10}\ Empirical\ data$')
-            ax[0].text(0.05, 0.9, f'RMSE = {init_pred_error[i_best_net][0].round(decimals=3):.2f}', transform=ax[0].transAxes)
-
-            ax[1].scatter(np.log10(met_pred_after), np.log10(met_meas_after), c=c_after, alpha=a_after, s=50)
-            # ax[1].scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=9)
-            ax[1].axline((-2, -2), (2, 2), c='k')
-            ax[1].set_title('Optimised network')
-            ax[1].text(0.05, 0.9, f'RMSE = {final_pred_error[i_best_net][0].round(decimals=3):.2f}', transform=ax[1].transAxes)
-            ax[1].text(0.05, 0.8, r'$\chi_{excess}=$'+f'{final_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax[1].transAxes)
-            # ax[1].set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
-            # ax[1].set_ylabel(r'$log_{10}\ Empirical\ data$')
-            # ax[1].set_xlabel('', labelpad=0.1)
-            fig.supxlabel(r'$log_{10}\ Predicted\ metabolome$')
-            fig.tight_layout(pad=0.2)
-
-            figsave_flag = 0
             if figsave_flag:
-                fig.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-prediction-comparison.png', dpi=300)
-                plt.close(fig)
+                f.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-overlap-vs-rmse-lmplot.png', dpi=300)
+                plt.close(f.figure)
+            else:
+                plt.show()            
+
+
+            ###### Which overlaps are learnt, which metabolites have overlap either in production or consumption across replicates for each cell line
+            consumption_overlap_indices, consumption_overlap_mets, production_overlap_indices, production_overlap_mets = [[]], [[]], [[]], [[]]
+            
+            max_links = len(x_optim_best)//2
+            met_ID = diet.index.to_numpy()
+            for x in x_optim_list:
+                clist, cmets, plist, pmets = calculate_overlap_stats(x, n_ct, max_links, met_ID)
+                consumption_overlap_indices.append(clist)
+                consumption_overlap_mets.append(cmets)
+                production_overlap_indices.append(plist)
+                production_overlap_mets.append(pmets)
+
+            consumption_overlap_indices = np.concatenate(consumption_overlap_indices)
+            consumption_overlap_mets = np.concatenate(consumption_overlap_mets).astype(int)
+            production_overlap_indices = np.concatenate(production_overlap_indices)
+            production_overlap_mets = np.concatenate(production_overlap_mets).astype(int)
+
+            ### Overlapping links
+            overlap_indices_df = pd.DataFrame({'LinkType': np.concatenate([['Consumption']*len(consumption_overlap_indices), ['Production']*len(production_overlap_indices)]),
+                                            'Overlap': np.concatenate([consumption_overlap_indices, production_overlap_indices])})
+            
+            unique_indices = np.unique(overlap_indices_df['Overlap'].values) # All unique overlaps
+            index_len = np.array([len(i) for i in unique_indices]) # How many celltypes in each overlap
+            unique_indices_sorted = [[]]
+            for i in range(3, n_ct + n_ct - 1 + 1): # Range limits based on the string length for n_ct celltype overlap e.g., '1+2' is a string of length 3, '1+2+3' is of length 5, so this goes as n + (n-1), where n is the number of overlapping celltypes. The extra plus one is to account for the range function not including the last number
+                if len(unique_indices[index_len == i]) > 0: # If there is an overlap of this length
+                    unique_indices_sorted.append(unique_indices[index_len == i]) # Retrieving all overlaps of a given length this way sorts the unique elements of that particular length
+            unique_indices_sorted = np.concatenate(unique_indices_sorted[1:])
+
+            overlap_indices_df['Overlap'] = pd.Categorical(overlap_indices_df['Overlap'], categories=unique_indices_sorted) # This sets the column to categorical with the levels in the order above, giving 2-celltype overlaps first, then three and so on, and sorted by celltype number within each overlap length
+            with sns.axes_style('darkgrid'):
+                g = sns.displot(data=overlap_indices_df, x='Overlap',
+                                hue='LinkType', palette={'Consumption': 'tab:green',
+                                                        'Production': 'tab:blue'},
+                                multiple='stack', stat='probability', common_norm=False, 
+                                discrete=True, shrink=0.9, height=4, aspect=3)
+                g.set_xticklabels(rotation=65)
+                g.set_xlabels('Overlapping celltypes')
+                sns.move_legend(g, "lower center", bbox_to_anchor=(0.65, 0.75), ncol=2,
+                                title='Link type', frameon=True)
+                
+            if figsave_flag:
+                g.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-overlapping-links.png', dpi=300)
+                plt.close(g.figure)
             else:
                 plt.show()
 
+            ### Overlapping mets
+            overlap_mets_df = pd.DataFrame({'LinkType': np.concatenate([['Consumption']*len(consumption_overlap_mets), ['Production']*len(production_overlap_mets)]),
+                                            'Metabolite': np.concatenate([consumption_overlap_mets, production_overlap_mets])})
+            mets_order = np.array(ec_real.sort_values(inplace=False).index) # IDs of overlapping metabolites sorted by their abundances in the fresh medium
+            mets_ranks = np.arange(len(mets_order)) # Assigning ranks to the sorted metabolites
+            overlap_mets_df.loc[:, 'MetRanks'] = np.array([mets_ranks[np.where(i == mets_order)[0]][0] for i in overlap_mets_df['Metabolite'].values]) # Mapping metabolite IDs in the dataframe to ranks based on fresh medium abundaces
+            with sns.axes_style('darkgrid'): # Histogram of ranks
+                h = sns.displot(data=overlap_mets_df, x='MetRanks',
+                                hue='LinkType', palette={'Consumption': 'tab:green',
+                                                        'Production': 'tab:blue'},
+                                multiple='stack', stat='probability', common_norm=False,
+                                discrete=True, height=3.85, aspect=3.5, legend=True)
+                h.set_xlabels('Abundance rank')
+                sns.move_legend(h, "lower center", bbox_to_anchor=(0.67, 0.7), ncol=2,
+                                title='Link type', frameon=True)
+                plt.xlim(-5, 120)
+            if figsave_flag:
+                h.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-overlapping-metabolites.png', dpi=300)
+                plt.close(h.figure)
+            else:
+                plt.show()
+
+            ### Which overlapping links are common among the metabolites with the highest learnt overlap
+            ### Consumption
+            top_met_consumption = overlap_mets_df[overlap_mets_df['LinkType'] == 'Consumption']['Metabolite'].value_counts().reset_index().iloc[0, 0]
+            top_met_consumption_links = overlap_indices_df[(overlap_indices_df['LinkType']=='Consumption')*(overlap_mets_df['Metabolite']==top_met_consumption)]
+
+            ### Production
+            top_met_production = overlap_mets_df[overlap_mets_df['LinkType'] == 'Production']['Metabolite'].value_counts().reset_index().iloc[0, 0]
+            top_met_production_links = overlap_indices_df[(overlap_indices_df['LinkType']=='Production')*(overlap_mets_df['Metabolite']==top_met_production)]
+
+            top_met_links_df = pd.concat([top_met_consumption_links, top_met_production_links])
+            top_met_unique_indices = np.unique(top_met_links_df['Overlap'].values) # All unique overlaps
+            index_len = np.array([len(i) for i in top_met_unique_indices]) # How many celltypes in each overlap
+            unique_indices_sorted = [[]]
+            for i in range(3, n_ct + n_ct - 1): # Range limits based on the string length for n_ct celltype overlap e.g., '1+2' is a string of length 3, '1+2+3' is of length 5, so this goes as n + (n-1), where n is the number of overlapping celltypes
+                if len(top_met_unique_indices[index_len == i]) > 0: # If there is an overlap of this length
+                    unique_indices_sorted.append(top_met_unique_indices[index_len == i]) # Retrieving all overlaps of a given length this way sorts the unique elements of that particular length
+            unique_indices_sorted = np.concatenate(unique_indices_sorted[1:])
+            top_met_links_df['Overlap'] = pd.Categorical(top_met_links_df['Overlap'], categories=unique_indices_sorted)
+            with sns.axes_style('darkgrid'):
+                q = sns.displot(data=top_met_links_df, x='Overlap',
+                                hue='LinkType', palette={'Consumption': 'tab:green',
+                                                        'Production': 'tab:blue'},
+                                multiple='stack', stat='probability', common_norm=False, 
+                                discrete=True, shrink=0.9, height=4, aspect=3)
+                q.set_xticklabels(rotation=65)
+                q.set_xlabels('Overlapping celltypes')
+                q.figure.suptitle('Top metabolites overlap', y=1.03)
+                sns.move_legend(q, "lower center", bbox_to_anchor=(0.67, 0.7), ncol=2,
+                                title='Link type', frameon=True)
+            if figsave_flag:
+                q.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-top-mets-overlapping-links.png', dpi=300)
+                plt.close(q.figure)
+            else:
+                plt.show()
+
+
+# %%
+##### Heatmaps with learning
+figsave_flag = 0
+rmse_arr_heatmap = [[]]
+num_final_heatmap = [[]]
+for cl in sublinear_cell_lines:
+    rmse = []
+    num_final = []
+    reward = 0.1
+    penalty = 0.1
+    for n_ct in range(3, 6):
+        # cl='A549-ATCC'
+        pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/optim-net/'+cl
+
+        [x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, n_pred_list, residual_list, balance_flag_list, prod_overlap_list, con_overlap_list,
+                        metabolome_pred_before_list, metabolome_meas_before_list,
+                        metabolome_pred_after_list, metabolome_meas_after_list,
+                        valid_index_before_list, valid_index_after_list] = pd.read_pickle(pickle_path + '/reward-'+str(reward)+'-penalty-'+str(penalty)+'-optimised_network_output.pickle')
+        final_error = np.array([arr[-1] for arr in log_bias_list])
+        rmse.append(final_error[balance_flag_list].mean())
+        num_final.append(balance_flag_list.sum())
+
+    rmse_arr_heatmap.append(rmse)
+    num_final_heatmap.append(num_final)
+
+rmse_arr_heatmap = np.array(rmse_arr_heatmap[1:])
+num_final_heatmap = np.array(num_final_heatmap[1:])
+
+learn_heatmap_df = pd.DataFrame(rmse_arr_heatmap,
+                          columns=np.arange(3, 6),
+                          index=sublinear_cell_lines)
+
+f, ax = plt.subplots(1, 1, figsize=(7.5, 15))
+ax = sns.heatmap(data=learn_heatmap_df, cmap='crest')
+ax.set_xlabel(r'$N_{CT}$')
+ax.set_ylabel('Cell line')
+ax.set_title(r'RMSE vs $N_{CT}$')
+
+if figsave_flag:
+    f.figure.savefig('../figures/optim-rmse-vs-nct-heatmap.png', dpi=300, bbox_inches='tight')
+    plt.close(f.figure)
+else:
+    plt.show()
+
+with sns.axes_style("darkgrid"):
+    g = sns.lineplot(data=learn_heatmap_df.T, palette='Blues_d', legend=False)
+    g.set_xlabel(r'$N_{CT}$')
+    g.set_ylabel('RMSE')
+    g.set_title('Random networks w/o learning', pad=12)
+if figsave_flag:
+    g.figure.savefig('../figures/optim-rmse-vs-nct-lineplot.png', dpi=300, bbox_inches='tight')
+    plt.close(g.figure)
+else:
+    plt.show()
 
 # %%
 ######### Figure 2, as in slide 7 onwards

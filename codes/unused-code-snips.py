@@ -850,3 +850,428 @@
 #                 np.log10(ec_real[con_index_ct2[0]]),
 #             c=colors[con_index_ct2], marker='X',
 #             alpha=0.6, edgecolor='face')
+
+############# Sensitivity code from cancer-all-network-models.py###############
+# # %%
+# ###### Running sensitivity simulations for kT, penalty and reward for one cell line, for different numbers of celltypes
+# for n_ct in range(1, 5):
+#     home_dir = os.getcwd()
+#     all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
+#     # i_selfish = 0
+
+#     # pickle_in = open("data.pickle","rb")
+#     celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-data.pickle')
+
+#     slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
+#     nets_temp = all_networks.copy()
+
+#     ### Filtering those networks for cell lines with power law slopes
+#     i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_lines))[0]
+#     all_networks = []
+#     for i in i_sublinear:
+#         all_networks.append(nets_temp[i])
+#     ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
+
+#     i_nonzero_celltypes = all_networks[0]['celltypes_ID'].unique()
+#     i_nonzero_celltypes = np.sort(i_nonzero_celltypes)
+#     i_nonzero_celltypes = celltype_ID.values.copy()
+#     i_nonzero_metabolites = all_networks[0]['metabolites_ID'].unique()
+#     # i_nonzero_metabolites = np.sort(i_nonzero_metabolites)
+
+#     MAX_ID_celltypes = len(i_nonzero_celltypes)  # MAX_ID_celltypes is the maximum of ID labels for celltypes.
+#     MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
+
+#     #### Model initialisation
+#     f_arr = np.linspace(0.1, 1, 5)
+#     cell_line_names = ec_metabolome.columns.values
+#     k = len(celltype_ID)  # Number of cell types in the model
+
+#     ######## Diet as the average of all the Baseline values
+#     diet = met_baseline.mean(axis=1)
+
+#     # ec_corr = np.zeros((len(f_arr), len(cell_line_names)))
+#     # ct_full = np.zeros((len(f_arr), len(cell_line_names))) # For one cell type
+#     # mean_error = np.zeros((len(f_arr), len(cell_line_names)))
+#     # # ct_full = np.zeros((len(f_arr), len(cell_line_names), k)) # For more than one cell type
+#     # metabolome_pred = np.zeros((len(f_arr), len(cell_line_names), len(ec_metabolome)))
+#     # slopes = np.zeros_like(ec_corr)
+#     # intercepts = np.zeros_like(ec_corr)
+
+
+#     ## Source for initial and final cell numbers for the various cell lines: https://www.thermofisher.com/in/en/home/references/gibco-cell-culture-basics/cell-culture-protocols/cell-culture-useful-numbers.html
+#     n_lines = len(core_mean.loc[:, 'Cell line'])
+#     # nonadh_cell_lines = ['SR', 'MOLT-4', 'HL-60(TB)', 'K562', 'RPMI 8226', 'CCRF-CEM']
+#     # i_nonadh = np.where(np.isin(core_mean.loc[:, 'Cell line'], nonadh_cell_lines))[0]
+
+#     t75_cell_lines = ['NCI-H460', 'HCC-2998', 'SW620']
+#     i_t75 = np.where(np.isin(cell_line_names, t75_cell_lines))[0]
+#     cellnum_init_all = np.array([4.9e+06]*n_lines)
+#     cellnum_init_all[i_t75] = 2.1e+06
+#     cellnum_final_all = np.array([23.3e+06]*n_lines)
+#     cellnum_final_all[i_t75] = 8.4e+06
+
+#     cellnum_init_all = cellnum_init_all[i_sublinear]
+#     cellnum_final_all = cellnum_final_all[i_sublinear]
+
+#     in_degree_flag = False
+#     if in_degree_flag:
+#         fig_name = 'with-in-degree'
+#     else:
+#         fig_name = 'no-in-degree'
+
+#     ####### Generate random networks, one for each cell line
+#     # for i in range(len(all_networks)):
+#     all_random_networks = []
+#     for i, net in enumerate(all_networks):
+#         bias_metabolome = ec_metabolome.iloc[:, i].values - diet.values
+#         rnet = generate_random_network(net, bias_metabolome)
+#         all_random_networks.append(rnet)
+
+#     ####### Sensitivity plots
+#     n_reps = 50
+#     bias = np.log10(ec_metabolome.iloc[:, 0].values + 1e-6) - np.log10(diet.values + 1e-6)
+
+#     i_cell_line = np.where(cell_line_names == 'A549-ATCC')[0][0]
+#     net_raw = generate_random_network(all_random_networks[i_cell_line], bias)
+
+#     all_params = np.array([0.5, cell_line_names[i_cell_line],
+#                 cellnum_init_all[i_cell_line], cellnum_final_all[i_cell_line],
+#                 net_raw, diet, in_degree_flag,
+#                 MAX_ID_metabolites, MAX_ID_celltypes,
+#                 0.02, 0., 0.], dtype=object)
+
+#     #### Sensitivity to kT-no penalty or reward
+#     kT_arr = np.repeat(np.array([1e-03, 0.5*1e-2, 1e-2, 0.5*1e-1, 1e-1]), n_reps)
+#     iter_params_list_kt = np.repeat(all_params[np.newaxis, :], len(kT_arr), 0)
+#     iter_params_list_kt[:, -3] = kT_arr.copy()
+
+#     #### Sensitivity to penalty-no reward and kT=0.0003
+#     penalty_arr = np.repeat(np.array([1e-4, 0.5*1e-3, 1e-3, 0.5*1e-2, 1e-2]), n_reps)
+#     iter_params_list_pn = np.repeat(all_params[np.newaxis, :], len(penalty_arr), 0)
+#     iter_params_list_pn[:, -2] = penalty_arr.copy()
+
+#     #### Sensitivity to reward-no penalty and kT=0.0003
+#     reward_arr = np.repeat(np.array([1e-4, 0.5*1e-3, 1e-3, 0.5*1e-2, 1e-2]), n_reps)
+#     iter_params_list_rw = np.repeat(all_params[np.newaxis, :], len(reward_arr), 0)
+#     iter_params_list_rw[:, -1] = reward_arr.copy()
+
+#     kt_vals = []
+#     kt_errors = []
+#     for param in tqdm(iter_params_list_kt, desc='kT'):
+#         data = run_network_optimisation(param)
+#         kt_vals.append(data[0])
+#         kt_errors.append(data[-1][-1])
+
+#     penalty_vals = []
+#     penalty_errors = []
+#     for param in tqdm(iter_params_list_pn, desc='penalty'):
+#         data = run_network_optimisation(param)
+#         penalty_vals.append(data[1])
+#         penalty_errors.append(data[-1][-1])
+
+#     reward_vals = []
+#     reward_errors = []
+#     for param in tqdm(iter_params_list_rw, desc='reward'):
+#         data = run_network_optimisation(param)
+#         reward_vals.append(data[2])
+#         reward_errors.append(data[-1][-1])
+
+#     ##### Byproduct fraction vs celltype number
+#     f_arr = np.repeat(np.linspace(0.1, 1, 5), n_reps)
+#     all_params = np.array([0., cell_line_names[0],
+#                 cellnum_init_all[0], cellnum_final_all[0],
+#                 net_raw, diet, in_degree_flag,
+#                 MAX_ID_metabolites, MAX_ID_celltypes,
+#                 0.02, 0., 0.], dtype=object)
+#     iter_params_list = np.repeat(all_params[np.newaxis, :], len(f_arr), 0)
+#     iter_params_list[:, 0] = f_arr.copy()
+
+#     f_vals = []
+#     f_errors = []
+#     n_pred_before = []
+#     n_pred_after = []
+
+#     for params in tqdm(iter_params_list, desc='f'):
+#         f_data = run_network_optimisation(params)
+#         f_vals.append(f_data[3])
+#         f_errors.append(f_data[-1][-1])
+
+#     # if __name__ == '__main__':
+#     #     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+#     #     pool = Pool(8)
+#     #     f_data = pool.map(run_network_optimisation, iter_params_list) #iterate over combinations
+#     #     pool.close()
+#     #     pool.join()
+
+#     # f_errors = np.array([arr[3] for arr in f_data])
+
+#     # if __name__ == '__main__':
+#     #     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+#     #     pool = Pool(8)
+#     #     kt_data = pool.map(run_network_optimisation, iter_params_list_kt) #iterate over combinations
+#     #     pool.close()
+#     #     pool.join()
+
+#     #     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+#     #     pool = Pool(8)
+#     #     penalty_data = pool.map(run_network_optimisation, iter_params_list_pn) #iterate over combinations
+#     #     pool.close()
+#     #     pool.join()
+        
+#     #     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+#     #     pool = Pool(8)
+#     #     reward_data = pool.map(run_network_optimisation, iter_params_list_rw) #iterate over combinations
+#     #     pool.close()
+#     #     pool.join()
+
+#     # kt_errors = np.array([arr[3] for arr in kt_errors])
+#     # penalty_errors = np.array([arr[3] for arr in penalty_errors])
+#     # reward_errors = np.array([arr[3] for arr in reward_errors])
+#     kt_df = pd.DataFrame({'kT': kt_vals, 'rmse': kt_errors})
+#     penalty_df = pd.DataFrame({'Penalty': penalty_vals, 'rmse': penalty_errors})
+#     reward_df = pd.DataFrame({'Reward': reward_vals, 'rmse': reward_errors})
+#     f_df = pd.DataFrame({'f': f_arr, 'rmse': f_errors}).groupby('f').agg(('mean', 'std'))
+
+#     net_state = 'optim-net/'
+#     pickle_path = '../raw-output/'+str(k)+'-celltypes/'+net_state+cell_line_names[i_cell_line]
+#     try:
+#         os.makedirs(pickle_path)
+#     except:
+#         pass
+
+#     pickle_out = open(pickle_path + "/sensitivity-kt-penalty-reward.pickle", "wb")
+#     pickle.dump([kt_df, penalty_df, reward_df], pickle_out, protocol=2)
+#     pickle_out.close()
+
+#     pickle_out = open(pickle_path + "/by-product-fraction.pickle", "wb")
+#     pickle.dump([f_df], pickle_out, protocol=2)
+#     pickle_out.close()
+
+# # %%
+# pickle_path = '../raw-output/'+str(1)+'-celltypes/'+net_state+cell_line_names[i_cell_line]
+# kt_df1, pn_df1, rw_df1 = pd.read_pickle(pickle_path + '/sensitivity-kt-penalty-reward.pickle')
+# f_df1 = pd.read_pickle(pickle_path + "/by-product-fraction.pickle")
+
+# pickle_path = '../raw-output/'+str(2)+'-celltypes/'+net_state+cell_line_names[i_cell_line]
+# kt_df2, pn_df2, rw_df2 = pd.read_pickle(pickle_path + '/sensitivity-kt-penalty-reward.pickle')
+# f_df2 = pd.read_pickle(pickle_path + "/by-product-fraction.pickle")
+
+# pickle_path = '../raw-output/'+str(3)+'-celltypes/'+net_state+cell_line_names[i_cell_line]
+# kt_df3, pn_df3, rw_df3 = pd.read_pickle(pickle_path + '/sensitivity-kt-penalty-reward.pickle')
+# f_df3 = pd.read_pickle(pickle_path + "/by-product-fraction.pickle")
+
+# pickle_path = '../raw-output/'+str(4)+'-celltypes/'+net_state+cell_line_names[i_cell_line]
+# kt_df4, pn_df4, rw_df4 = pd.read_pickle(pickle_path + '/sensitivity-kt-penalty-reward.pickle')
+# f_df4 = pd.read_pickle(pickle_path + "/by-product-fraction.pickle")
+
+# # n_reps = 50
+# # kT_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
+# # penalty_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
+# # reward_arr = np.repeat(np.array([1e-5, 0.5*1e-4, 1e-4, 0.5*1e-3, 1e-3]), n_reps)
+# figsave_flag = True
+# ct_num = np.array([np.repeat(1, len(kt_df1)), np.repeat(2, len(kt_df2)), np.repeat(3, len(kt_df3)), np.repeat(4, len(kt_df4))]).ravel()
+
+# kt_df_all = pd.DataFrame({'kT': np.concatenate([kT_arr, kT_arr, kT_arr, kT_arr]),
+#                 'CTNum': ct_num,
+#                 'MeanError': np.concatenate([kt_df1.loc[:, 'rmse'].values,
+#                                              kt_df2.loc[:, 'rmse'].values,
+#                                              kt_df3.loc[:, 'rmse'].values,
+#                                              kt_df4.loc[:, 'rmse'].values])})
+# sns.lineplot(data=kt_df_all, x='CTNum', hue='kT', y='MeanError', palette='crest')
+# if figsave_flag:
+#     plt.savefig('../figures/sensitivity-plot-rmse-vs-kt.png', dpi=300)
+#     plt.close()
+
+# pn_df_all = pd.DataFrame({'Penalty': np.concatenate([penalty_arr, penalty_arr, penalty_arr, penalty_arr]),
+#                 'CTNum': ct_num,
+#                 'MeanError': np.concatenate([pn_df1.loc[:, 'rmse'].values,
+#                                              pn_df2.loc[:, 'rmse'].values,
+#                                              pn_df3.loc[:, 'rmse'].values,
+#                                              pn_df4.loc[:, 'rmse'].values])})
+# sns.lineplot(data=pn_df_all, x='CTNum', hue='Penalty', y='MeanError', palette='crest')
+# if figsave_flag:
+#     plt.savefig('../figures/sensitivity-plot-rmse-vs-penalty.png', dpi=300)
+#     plt.close()
+
+# rw_df_all = pd.DataFrame({'Reward': np.concatenate([reward_arr, reward_arr, reward_arr, reward_arr]),
+#                 'CTNum': ct_num,
+#                 'MeanError': np.concatenate([rw_df1.loc[:, 'rmse'].values,
+#                                              rw_df2.loc[:, 'rmse'].values,
+#                                              rw_df3.loc[:, 'rmse'].values,
+#                                              rw_df4.loc[:, 'rmse'].values])})
+# sns.lineplot(data=rw_df_all, x='CTNum', hue='Reward', y='MeanError', palette='crest')
+# if figsave_flag:
+#     plt.savefig('../figures/sensitivity-plot-rmse-vs-reward.png', dpi=300)
+#     plt.close()
+
+# # %%
+# heatmap_df = pd.DataFrame(np.array([f_df4[0].iloc[:, 0],
+#                                     f_df3[0].iloc[:, 0],
+#                                     f_df2[0].iloc[:, 0],
+#                                     f_df1[0].iloc[:, 0]]),
+#                           columns=np.linspace(0.1, 1, 5), index=[4, 3, 2, 1])
+# plt.figure(figsize=(9, 6))
+# sns.heatmap(data=heatmap_df, cmap='crest',
+#             cbar_kws={'label': 'RMSE'})
+# plt.xlabel(r'Byproduct fraction, $f$')
+# plt.ylabel(r'Celltype number')
+# if figsave_flag:
+#     plt.savefig('../figures/heatmap-byproduct-fraction-celltype-number-vs-rmse.png', dpi=300)
+#     plt.close()
+
+# rmse_df= pd.DataFrame(np.array([f_df1[0].iloc[:, 0],
+#                                 f_df2[0].iloc[:, 0],
+#                                 f_df3[0].iloc[:, 0],
+#                                 f_df4[0].iloc[:, 0]]),
+#                           columns=np.linspace(0.1, 1, 5), index=[1, 2, 3, 4]).melt(var_name='f', value_name='mean', ignore_index=False).reset_index(names='Celltype number')
+# rmse_df.loc[:, 'sd'] = np.array([f_df1[0].iloc[:, 1],
+#                                     f_df2[0].iloc[:, 1],
+#                                     f_df3[0].iloc[:, 1],
+#                                     f_df4[0].iloc[:, 1]]).T.ravel()
+
+# rmse_df.groupby(['f']).plot(x='Celltype number', y='mean', yerr='sd',
+#                             kind='bar', capsize=3, figsize=(5, 4), legend=False,
+#                             ylabel=r'RMSE', xlabel=r'Celltype number')
+# # if figsave_flag:
+# #     plt.savefig('../figures/fraction-celltype-number-vs-rmse.png', dpi=300)
+# #     plt.close()
+
+
+# # %%
+# ########### Sensitivity for reward-penalty combinations
+# home_dir = os.getcwd()
+# n_ct = 2
+# all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
+# # i_selfish = 0
+
+# # pickle_in = open("data.pickle","rb")
+# celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-data.pickle')
+
+# slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
+# nets_temp = all_networks.copy()
+
+# ### Filtering those networks for cell lines with power law slopes
+# i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_lines))[0]
+# all_networks = []
+# for i in i_sublinear:
+#     all_networks.append(nets_temp[i])
+# ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
+
+# i_nonzero_celltypes = all_networks[0]['celltypes_ID'].unique()
+# i_nonzero_celltypes = np.sort(i_nonzero_celltypes)
+# i_nonzero_celltypes = celltype_ID.values.copy()
+# i_nonzero_metabolites = all_networks[0]['metabolites_ID'].unique()
+
+# MAX_ID_celltypes = len(i_nonzero_celltypes)  # MAX_ID_celltypes is the maximum of ID labels for celltypes.
+# MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
+
+# n_reps = 50
+# bias = np.log10(ec_metabolome.iloc[:, 0].values + 1e-6) - np.log10(diet.values + 1e-6)
+
+# reward_arr = np.repeat(np.array([0, 1e-3, 1e-2]), n_reps)
+# reward_arr = np.repeat(reward_arr, 3)
+# penalty_arr = np.repeat(np.array([0, 1e-3, 1e-2]), n_reps)
+# penalty_arr = np.repeat(penalty_arr[np.newaxis, :], 3, axis=0).ravel()
+
+# reward_vals = []
+# penalty_vals = []
+# errors = []
+# n_pred_before = []
+# n_pred_after = []
+# for i in tqdm(range(len(penalty_arr))):
+#     net_raw = generate_random_network(all_networks[i_cell_line], bias)
+#     all_params = np.array([0.3, cell_line_names[i_cell_line],
+#               cellnum_init_all[i_cell_line], cellnum_final_all[i_cell_line],
+#               net_raw, diet, in_degree_flag,
+#               MAX_ID_metabolites, MAX_ID_celltypes,
+#               0.003, penalty_arr[i], reward_arr[i]], dtype=object)
+    
+#     all_data = run_network_optimisation(all_params)
+#     reward_vals.append(all_data[2])
+#     penalty_vals.append(all_data[1])
+#     errors.append(all_data[-1][-1])
+#     n_pred_before.append(all_data[7][0])
+#     n_pred_after.append(all_data[7][-1])
+
+# # reward_test_df = pd.DataFrame({'reward': reward_vals,
+# #                                'rmse': reward_errors,
+# #                                'Original': n_pred_before,
+# #                                'Optimised': n_pred_after})
+
+# # penalty_test_df = pd.DataFrame({'penalty': penalty_vals,
+# #                                'rmse': reward_errors,
+# #                                'Original': n_pred_before,
+# #                                'Optimised': n_pred_after})
+
+# test_df = pd.DataFrame({'penalty': penalty_vals,
+#                         'reward': reward_vals,
+#                         'rmse': errors,
+#                         'Original': n_pred_before,
+#                         'Optimised': n_pred_after})
+# test_df.loc[:, 'PredChange'] = test_df.loc[:, 'Optimised'] - test_df.loc[:, 'Original']
+
+
+# fig_path = '../figures/'+str(n_ct)+'-celltypes/'+net_state+cell_line_names[i_cell_line]
+# try:
+#     os.makedirs(fig_path)
+# except:
+#     pass
+
+# sns.set_style('darkgrid')
+# fig = sns.catplot(data=test_df, x='penalty', y='PredChange',
+#             kind='box', col='reward', height=5, aspect=0.8,
+#             whis=(5, 95), fliersize=0.)
+# fig.refline(y=0, color='tab:red', linestyle='dashed', linewidth=3)
+# fig.set_axis_labels('Penalty', 'Change in # metabolites predicted', fontsize=17)
+# plt.savefig(fig_path + '/sensitivity-penalty-cross-reward-npred.png', dpi=300)
+
+# # reward_test_df = reward_test_df.melt(id_vars=['reward', 'rmse'], value_vars=['Original', 'Optimised'], value_name='NumPred', var_name='NetType')
+
+# # penalty_test_df = penalty_test_df.melt(id_vars=['penalty', 'rmse'], value_vars=['Original', 'Optimised'], value_name='NumPred', var_name='NetType')
+
+# # sns.boxplot(data=penalty_test_df, x='penalty', y='NumPred',
+# #             hue='NetType', palette='crest',
+# #             whis=(5, 95), fliersize=0.)
+# # plt.xlabel('Penalty')
+# # plt.ylabel('# metabolites predicted')
+# # plt.legend(title='Network type', ncols=3)
+# # plt.savefig('../figures/sensitivity-penalty-vs-npred.png', dpi=300)
+
+# # sns.boxplot(data=reward_test_df, x='reward', y='NumPred',
+# #             hue='NetType', palette='crest',
+# #             whis=(5, 95), fliersize=0.)
+# # plt.xlabel('Reward')
+# # plt.ylabel('# metabolites predicted')
+# # plt.legend(title='Network type', ncols=3)
+# # plt.savefig('../figures/sensitivity-reward-vs-npred.png', dpi=300)
+
+######## From old figure plan network learning summary stats
+# #### Pairwise comparison of combined vs uncombined network predictions
+# final_error = np.array([arr[-1] for arr in log_bias_list])
+# final_error_combined = np.array([arr[-1] for arr in log_bias_combined_list])
+# df = pd.DataFrame({'N_CT': np.concatenate([np.ones_like(final_error), np.ones_like(final_error)+1]).astype(int),
+#                     'Replicate': np.concatenate([np.arange(1, 1+n_reps), np.arange(1, 1+n_reps)]),
+#                     'Balance': np.concatenate([balance_flag_list, balance_flag_list]),
+#                     'RMSE': np.concatenate([final_error_combined, final_error])})
+# sns.lineplot(data=df, x='N_CT', y='RMSE',
+#             units='Replicate',
+#             hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
+#             dashes=False, estimator=None, ax=ax2, legend=True)
+# sns.scatterplot(data=df, x='N_CT', y='RMSE',
+#                 hue='Balance', palette='coolwarm_r', hue_norm=(0, 1),
+#                 edgecolor='face', alpha=0.9, ax=ax2, legend=False)
+# ax2.set_xlabel(r'$N_{CT}$')
+# ax2.set(xlim=(0.5, 2.5), xticks=[1, 2], xticklabels=[1, n_ct])
+# # ax2.get_legend().remove()
+
+# #### More non-trivially predicted metabolites means more error?
+# num_pred = np.array([arr[-1] for arr in n_pred_list])
+# final_error = np.array([arr[-1] for arr in log_bias_list])
+# sns.regplot(x=num_pred, y=final_error, color='k', ax = ax3,
+#             line_kws={'color': 'r', 'linewidth': 2}, scatter_kws={'s': 10})
+# rsq, pval = spearmanr(num_pred, final_error)
+# ax3.text(0.05, 0.9, f'rho = {rsq**2:.2f}, $p$ = {pval:.2f}', transform=ax3.transAxes)
+# ax3.xaxis.set_major_locator(MaxNLocator(integer=True))
+# # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
+# ax3.set_xlabel('# metabolites predicted')
+# ax3.set_ylabel('Final RMSE')
