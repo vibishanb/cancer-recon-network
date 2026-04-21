@@ -467,9 +467,9 @@ else:
 
 # %%
 ##### Figure 4
-for k in tqdm(range(len(sublinear_cell_lines)), desc='Cell line: '):#np.arange(0, 1):
-        for n_ct in np.arange(3, 6):
-            figsave_flag = 1
+for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: '):#np.arange(0, 1):
+        for n_ct in np.arange(3, 4):
+            figsave_flag = 0
             reward = 0.5
             penalty = 0.5
             cl = sublinear_cell_lines[k]
@@ -482,7 +482,7 @@ for k in tqdm(range(len(sublinear_cell_lines)), desc='Cell line: '):#np.arange(0
                         metabolome_pred_after_list, metabolome_meas_after_list,
                         valid_index_before_list, valid_index_after_list] = pd.read_pickle(pickle_path + '/reward-'+str(reward)+'-penalty-'+str(penalty)+'-optimised_network_output.pickle')
             max_links = int(len(x_ori_list[0].flatten())/2)
-            n_reps = len(balance_flag_list)
+            n_reps = len(n_pred_list)
 
             init_pred_error = np.array([arr[0] for arr in log_bias_list])
             final_pred_error = np.array([arr[-1] for arr in log_bias_list])
@@ -490,7 +490,8 @@ for k in tqdm(range(len(sublinear_cell_lines)), desc='Cell line: '):#np.arange(0
             init_residual = np.array([arr[0] for arr in residual_list])
             final_residual = np.array([arr[-1] for arr in residual_list])
 
-            i_best_net = np.where(final_pred_error == final_pred_error.min())[0] #np.where(pred_error_change == pred_error_change.max())[0]
+            pred_error_change = init_pred_error - final_pred_error
+            i_best_net = np.where(pred_error_change == pred_error_change.max())[0] #np.where(final_pred_error == final_pred_error.min())[0]
             x_ori_best = x_ori_list[i_best_net].flatten()
             x_optim_best = x_optim_list[i_best_net].flatten()
 
@@ -504,7 +505,7 @@ for k in tqdm(range(len(sublinear_cell_lines)), desc='Cell line: '):#np.arange(0
             # colors = np.where(balance_flag_list, 'b', 'tab:red')
             for i in range(n_reps):
                 # sns.lineplot(log_bias_list[i], ax=ax1, color=colors[i])
-                log_bias = np.array(log_bias_list[i])
+                log_bias = np.array(log_bias_list[i]).astype(float)
                 norm_log_bias = log_bias/log_bias.sum()
                 lines = colored_line(con_overlap_list[i], prod_overlap_list[i],
                                     c=norm_log_bias, ax=ax1, cmap='Greens', alpha=0.6, zorder=1)
@@ -517,8 +518,8 @@ for k in tqdm(range(len(sublinear_cell_lines)), desc='Cell line: '):#np.arange(0
             ax1.set_xlabel("# consumption overlap")
             ax1.set_ylabel("# production overlap")
             ax1.set_title("%d replicate runs" % n_reps)
-            ax1.set_xlim(0, 60)
-            ax1.set_ylim(0, 22)
+            ax1.set_xlim(0, con_overlap_final.max()+5)
+            ax1.set_ylim(0, prod_overlap_final.max()+5)
             ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
             ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
 

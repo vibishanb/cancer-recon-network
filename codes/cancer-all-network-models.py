@@ -21,6 +21,7 @@ from scipy.stats import pearsonr, spearmanr
 import networkx as nx
 from multiprocessing import Pool
 import warnings
+from itertools import compress
 
 import os
 import numpy.matlib
@@ -472,9 +473,9 @@ def run_network_optimisation(all_params):
     valid_index_list = []
     n_pred_list = []
     residual_list = []
+    x_list = []
     con_overlap_list, prod_overlap_list = [], []
     
-
     ct0 = cellnum_init*celltypefreq.to_numpy()
 
     # Save original network features and prediction errors
@@ -516,6 +517,7 @@ def run_network_optimisation(all_params):
     log_bias_combined_list.append(log_bias_combined_init)
     n_pred_list.append(n_pred)
     residual_list.append(residual_init)
+    x_list.append(x_ori)
     bias_metabolome_ori = bias_metabolome.copy()
     prod_overlap_list.append(num_prod_overlap)
     con_overlap_list.append(num_con_overlap)
@@ -537,25 +539,25 @@ def run_network_optimisation(all_params):
     Twindow = 500
     error_window = []
     for i in range(10000):
-
+        linknum = np.random.randint(2, n_ct)
         error_window.append(error_before)
         x_previous = x.copy()
         if np.random.uniform(0,1,1)[0] <= 0.5: # Each step chooses randomly between adding a new link or removing an existing link
-            i_x = np.random.choice(np.where(x==0)[0], 1, p=prior_prob[x==0]/prior_prob[x==0].sum())[0] # New link is chosen based on the prior probability-smaller bias in prediction leads to smaller prior prob
-            x[i_x] = 1
+            i_x = np.random.choice(np.where(x==0)[0], linknum, p=prior_prob[x==0]/prior_prob[x==0].sum())[0] # New link is chosen based on the prior probability-smaller bias in prediction leads to smaller prior prob
+            x[[i_x]] = np.ones_like(i_x)
         elif (n_pred_init >= 4) * ((x==1).sum() > 0): # Only propose deletion if at least three metabolites can be non-trivially predicted after deletion
-            i_x = np.random.choice(np.where(x==1)[0], 1, p=prior_prob[x==1]/prior_prob[x==1].sum())[0] # New link is chosen based on the prior probability-smaller bias in prediction leads to smaller prior prob
-            x[i_x] = 0
+            i_x = np.random.choice(np.where(x==1)[0], linknum, p=prior_prob[x==1]/prior_prob[x==1].sum())[0] # New link is chosen based on the prior probability-smaller bias in prediction leads to smaller prior prob
+            x[[i_x]] = np.zeros_like(i_x)
         else:
             continue
 
         error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, log_bias_combined, n_pred, residual_after, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
         prior_prob = calculate_priors(bias_metabolome, prod_celltypes)
 
-        if (n_pred >= 3) * (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
+        if (n_pred >= 3) * (error_before - error_after >= 0.001):#* (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
             error_before = error_after
             error_list.append(error_before)
-            prior_list.append(prior_prob[i_x])
+            prior_list.append(prior_prob[[i_x]])
             log_bias_list.append(log_bias)
             log_bias_combined_list.append(log_bias_combined)
             metabolome_pred_list.append(metabolome_pred)
@@ -565,18 +567,19 @@ def run_network_optimisation(all_params):
             residual_list.append(residual_after)
             prod_overlap_list.append(num_prod_overlap)
             con_overlap_list.append(num_con_overlap)
+            x_list.append(x.copy())
             n_pred_init = n_pred
             residual_init = residual_after.copy()
 
         else:  ## not accepted   
-            x[i_x] = x_previous[i_x] # Maintain the previous state
+            x[[i_x]] = x_previous[[i_x]] # Maintain the previous state
             n_pred_init = n_pred
             residual_init = residual_after.copy()
 
         if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow)*kT)):
             break
     
-    return [kT, pred_params['penalty'], pred_params['reward'], f, x_ori, x, error_list, n_pred_list, residual_list, prod_overlap_list, con_overlap_list, metabolome_pred_list, metabolome_measured_list, valid_index_list, log_bias_list, log_bias_combined_list]#, consumption_added, production_added, consumption_deleted, production_deleted]
+    return [kT, pred_params['penalty'], pred_params['reward'], f, x_ori, x, x_list, error_list, n_pred_list, residual_list, prod_overlap_list, con_overlap_list, metabolome_pred_list, metabolome_measured_list, valid_index_list, log_bias_list, log_bias_combined_list]#, consumption_added, production_added, consumption_deleted, production_deleted]
 
 def net_from_x(x, MAX_ID_metabolites, MAX_ID_celltypes):
 
@@ -604,6 +607,32 @@ def net_from_x(x, MAX_ID_metabolites, MAX_ID_celltypes):
     net = pd.concat([net_added_consumption, net_added_production])
 
     return net
+
+def calculate_overlap_stats(x, n_ct, max_links, met_ID):
+
+    x_consumption = x[:max_links]
+    x_production = x[max_links:]
+
+    ### Consumption overlap
+    con_index_overlap, con_mets_overlap = [[]], []
+    for i, arr in enumerate(x_consumption.reshape(n_ct, -1).T):
+        indices = np.where(arr == 1)[0]
+        if len(indices) > 1:
+            con_index_overlap.append(indices+1)
+            con_mets_overlap.append(met_ID[i])
+    
+    ### Production overlap
+    pro_index_overlap, pro_mets_overlap = [[]], []
+    for i, arr in enumerate(x_production.reshape(n_ct, -1).T):
+        indices = np.where(arr == 1)[0]
+        if len(indices) > 1:
+            pro_index_overlap.append(indices+1)
+            pro_mets_overlap.append(met_ID[i])
+    
+    clist = ["+".join(map(str, ind.tolist())) for ind in con_index_overlap[1:]]
+    plist = ["+".join(map(str, ind.tolist())) for ind in pro_index_overlap[1:]]
+
+    return [clist, con_mets_overlap, plist, pro_mets_overlap]
 
 def plot_networks(net, df_summary, which_net, n_reps, fig_path, figsave_flag):
     # net_plot = net_optim.copy()
@@ -647,24 +676,15 @@ def plot_networks(net, df_summary, which_net, n_reps, fig_path, figsave_flag):
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
 
-for n_ct in range(3, 7):
+for n_ct in range(3, 4):
     home_dir = os.getcwd() #+ '/codes'
-    # n_ct = 1
-    # all_networks, i_intake, names = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-cancer_network.pickle')
-    # i_selfish = 0
-
-    # pickle_in = open("data.pickle","rb")
     celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-data.pickle')
     cell_line_names = ec_metabolome.columns.to_numpy()
 
     slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
-    # nets_temp = all_networks.copy()
 
     ### Filtering those networks for cell lines with power law slopes
     i_sublinear = np.where(np.isin(ec_metabolome.columns.values, sublinear_cell_lines))[0]
-    # all_networks = []
-    # for i in i_sublinear:
-    #     all_networks.append(nets_temp[i])
     ec_metabolome = ec_metabolome.iloc[:, i_sublinear]
 
     ######## Diet as the average of all the Baseline values
@@ -686,8 +706,7 @@ for n_ct in range(3, 7):
     cellnum_final_all = cellnum_final_all[i_sublinear]
 
     cell_line_names = ec_metabolome.columns.to_numpy()
-    for i_cell_line in range(len(sublinear_cell_lines)):
-        # i_cell_line = np.where(cell_line_names == 'A549-ATCC')[0][0]
+    for i_cell_line in range(1):#range(len(sublinear_cell_lines[0])):
         cl = cell_line_names[i_cell_line]
         f = 0.5
         ec_real = ec_metabolome.loc[:, cl].values
@@ -712,14 +731,15 @@ for n_ct in range(3, 7):
         cellnum_final = cellnum_final_all[i_cell_line]
         bias = np.log10(ec_metabolome.iloc[:, i_cell_line].values + 1e-6) - np.log10(diet.values + 1e-6)
 
-        reward_arr = np.array([0.1, 0.5])
-        penalty_arr = np.array([0.1, 0.5])
+        reward_arr = np.array([0.5])
+        penalty_arr = np.array([0.5])
 
         in_degree_flag = False
 
         for k in range(len(reward_arr)):
             x_optim_list = [[]]
             x_ori_list = [[]]
+            x_all_list = [[]]
             error_list_all_reps = [[]]
             log_bias_list = [[]]
             log_bias_combined_list = [[]]
@@ -735,17 +755,18 @@ for n_ct in range(3, 7):
             # balance_flag_list = []
 
             n_reps = len(all_networks)
-            for i in np.arange(n_reps):
+            for i in range(n_reps):
                 all_params = np.array([f, cl,
                         cellnum_init, cellnum_final,
                         all_networks[i], diet, in_degree_flag,
                         MAX_ID_metabolites, MAX_ID_celltypes,
                         0.003, penalty_arr[k], reward_arr[k]], dtype=object)
 
-                kT, penalty, reward, f, x_ori, x, elist, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias, bias_combined = run_network_optimisation(all_params)
+                kT, penalty, reward, f, x_ori, x, x_list, elist, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias, bias_combined = run_network_optimisation(all_params)
 
                 x_ori_list.append(x_ori)
                 x_optim_list.append(x)
+                x_all_list.append(x_list)
                 error_list_all_reps.append(elist)
                 log_bias_list.append(bias)
                 log_bias_combined_list.append(bias_combined)
@@ -762,6 +783,7 @@ for n_ct in range(3, 7):
 
             x_ori_list = np.array(x_ori_list[1:])
             x_optim_list = np.array(x_optim_list[1:])
+            x_all_list = np.array(x_all_list[1:], dtype=object)
             error_plot_list = np.array(error_list_all_reps[1:], dtype=object)
             log_bias_list = np.array(log_bias_list[1:], dtype=object)
             log_bias_combined_list = np.array(log_bias_combined_list[1:], dtype=object)
@@ -790,33 +812,6 @@ for n_ct in range(3, 7):
                         valid_index_before_list, valid_index_after_list], pickle_out, protocol=2)
             pickle_out.close()
 
-# %%
-# ##### Check out the best performing network
-# pred_error_change = np.array([list[0]-list[-1] for list in log_bias_list])
-# init_pred_error = np.array([arr[0] for arr in log_bias_list])
-# final_pred_error = np.array([arr[-1] for arr in log_bias_list])
-
-# init_residual = np.array([arr[0] for arr in residual_list])
-# final_residual = np.array([arr[-1] for arr in residual_list])
-
-# i_best_net = np.where(final_pred_error == final_pred_error.min())[0]#np.where(pred_error_change == pred_error_change.max())[0]
-
-# met_pred_before = metabolome_pred_before_list[i_best_net][0].astype(np.float64)
-# met_pred_after = metabolome_pred_after_list[i_best_net][0].astype(np.float64)
-
-# met_meas_before = metabolome_meas_before_list[i_best_net][0].astype(np.float64)
-# met_meas_after = metabolome_meas_after_list[i_best_net][0].astype(np.float64)
-
-# i_before = valid_index_before_list[i_best_net][0].astype(bool)
-# i_after = valid_index_after_list[i_best_net][0].astype(bool)
-
-# ######## Convert x to net structure (convert the adjacency matrix into the edge list)
-
-# x_ori_best = x_ori_list[i_best_net].flatten()
-# x_optim_best = x_optim_list[i_best_net].flatten()
-
-# net_ori = net_from_x(x_ori_best, MAX_ID_metabolites, MAX_ID_celltypes)
-# net_optim = net_from_x(x_optim_best, MAX_ID_metabolites, MAX_ID_celltypes)
 
 # # %%
 # ######### Change in error with additions and deletions
@@ -872,3 +867,67 @@ for n_ct in range(3, 7):
 #     plt.show()
 # # plt.scatter(np.log10(metabolome_pred+1e-7), np.log10(metabolome_measured+1e-7), c='k', s=4)
 
+
+# %%
+max_links = n_ct*MAX_ID_metabolites
+met_ID = diet.index.to_numpy()
+linktype_error_df = pd.DataFrame()
+n_reps = len(log_bias_list)
+
+for k in range(n_reps):
+    linkchange = []
+    linktype = []
+    changetype = []
+    test = []
+    x_list = x_all_list[k]
+    elist = log_bias_list[k]
+    for i in range(1, len(x_list)):
+        x_diff = x_list[i] - x_list[i-1]
+        i_change = np.where(x_diff != 0)[0]
+        changetype.append(np.where(x_diff[i_change] > 0, 'Added', 'Removed')[0])
+
+        if i_change < max_links:
+            linktype.append('Consumption')
+            l1, m1 = calculate_overlap_stats(x_list[i-1], n_ct, max_links, met_ID)[:2]
+            l2, m2 = calculate_overlap_stats(x_list[i], n_ct, max_links, met_ID)[:2]
+
+        else:
+            linktype.append('Production')
+            l1, m1 = calculate_overlap_stats(x_list[i-1], n_ct, max_links, met_ID)[2:]
+            l2, m2 = calculate_overlap_stats(x_list[i], n_ct, max_links, met_ID)[2:]
+
+        d1 = {m: l for m, l in zip(m1, l1)}
+        d2 = {m: l for m, l in zip(m2, l2)}
+        lc_temp = []
+        for s in (d2.items() ^ d1.items()):
+            lc_temp.append(s)
+            test.append(len((d2.items() ^ d1.items())))
+        
+        if len(lc_temp) > 1:
+            final_lc = np.where(changetype[-1] == 'Added', list(compress(lc_temp, [s in d2.items() for s in lc_temp])),
+                                list(compress(lc_temp, [s in d1.items() for s in lc_temp])))
+            linkchange.append([s[1] for s in final_lc])
+        else:
+            linkchange.append([s[1] for s in lc_temp])
+
+    i_valid = np.array([np.where(len(l) == 0, False, True) for l in linkchange])
+    df = pd.DataFrame({'LinkType': list(compress(linktype, i_valid)),
+                                      'ChangeType': list(compress(changetype, i_valid)),
+                                      'Overlap': [len(l[0]) for l in list(compress(linkchange, i_valid))],
+                                      'RMSEdiff': np.diff(elist)[i_valid]})
+
+    linklen = df['Overlap'].values
+    df.loc[:, 'OverlapLen'] = (1 + (linklen/2)).astype(int)
+    df.loc[:, 'RMSEType'] = np.where(df['RMSEdiff'].values < 0, True, False)
+    linktype_error_df = pd.concat([linktype_error_df, df], ignore_index=True)
+linktype_error_df.loc[:, 'LogDiff'] = np.log10(linktype_error_df.loc[:, 'RMSEdiff'].abs())
+
+# %%
+g = sns.catplot(data=linktype_error_df, x='OverlapLen', y='LogDiff', kind='box',
+            hue='RMSEType', palette='crest', hue_norm=(0, 1),
+            row='LinkType', col='ChangeType',
+            margin_titles=True)
+g.set_titles(row_template="{row_name} links", col_template="Links {col_name}")
+g.set(ylabel=r'$log_{10}\ (\Delta$RMSE)', xlabel='Overlap length')
+# g.set(yscale='log')
+# %%
