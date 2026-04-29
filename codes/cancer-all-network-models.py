@@ -538,7 +538,7 @@ def run_network_optimisation(all_params):
     kT = all_params[9]
     Twindow = 500
     error_window = []
-    for i in range(10000):
+    for i in range(20000):
         linknum = np.random.randint(2, n_ct)
         error_window.append(error_before)
         x_previous = x.copy()
@@ -554,7 +554,7 @@ def run_network_optimisation(all_params):
         error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, log_bias_combined, n_pred, residual_after, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
         prior_prob = calculate_priors(bias_metabolome, prod_celltypes)
 
-        if (n_pred >= 3) * (error_before - error_after >= 0.001):#* (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
+        if (n_pred >= 3) * ((error_before - error_after) >= 0.001):#* (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
             error_before = error_after
             error_list.append(error_before)
             prior_list.append(prior_prob[[i_x]])
@@ -676,7 +676,7 @@ def plot_networks(net, df_summary, which_net, n_reps, fig_path, figsave_flag):
 """Network optimisation simulations"""
 ############ Run network optimisation 'n_rep' times for a given cell line, each time starting with a new randomised network
 
-for n_ct in range(3, 4):
+for n_ct in range(4, 5):
     home_dir = os.getcwd() #+ '/codes'
     celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pd.read_pickle(home_dir + '/' + str(n_ct) + '-cells-data.pickle')
     cell_line_names = ec_metabolome.columns.to_numpy()
@@ -731,8 +731,8 @@ for n_ct in range(3, 4):
         cellnum_final = cellnum_final_all[i_cell_line]
         bias = np.log10(ec_metabolome.iloc[:, i_cell_line].values + 1e-6) - np.log10(diet.values + 1e-6)
 
-        reward_arr = np.array([0.5])
-        penalty_arr = np.array([0.5])
+        reward_arr = np.array([0.])
+        penalty_arr = np.array([0.05])
 
         in_degree_flag = False
 
@@ -754,8 +754,9 @@ for n_ct in range(3, 4):
             prod_overlap_list, con_overlap_list = [[]], [[]]
             # balance_flag_list = []
 
-            n_reps = len(all_networks)
-            for i in range(n_reps):
+            i_balance = np.where(balance_flag_list)[0]
+            n_reps = len(i_balance)
+            for i in i_balance:
                 all_params = np.array([f, cl,
                         cellnum_init, cellnum_final,
                         all_networks[i], diet, in_degree_flag,
@@ -874,53 +875,67 @@ met_ID = diet.index.to_numpy()
 linktype_error_df = pd.DataFrame()
 n_reps = len(log_bias_list)
 
-for k in range(n_reps):
-    linkchange = []
-    linktype = []
-    changetype = []
-    test = []
-    x_list = x_all_list[k]
-    elist = log_bias_list[k]
-    for i in range(1, len(x_list)):
-        x_diff = x_list[i] - x_list[i-1]
-        i_change = np.where(x_diff != 0)[0]
-        changetype.append(np.where(x_diff[i_change] > 0, 'Added', 'Removed')[0])
+init_error = np.array([arr[0] for arr in log_bias_list])
+final_error = np.array([arr[-1] for arr in log_bias_list])
+error_change = final_error - init_error
+i_best = np.where(final_error == final_error.min())[0]
 
-        if i_change < max_links:
-            linktype.append('Consumption')
-            l1, m1 = calculate_overlap_stats(x_list[i-1], n_ct, max_links, met_ID)[:2]
-            l2, m2 = calculate_overlap_stats(x_list[i], n_ct, max_links, met_ID)[:2]
+# for k in range(1):
+k = i_best[0]
+linkchange = []
+linktype = []
+changetype = []
+test = []
+x_list = x_all_list[k]
+elist = log_bias_list[k]
+for i in range(1, len(x_list)):
+    x_diff = x_list[i] - x_list[i-1]
+    i_change = np.where(x_diff != 0)[0]
+    changetype.append(np.where(x_diff[i_change] > 0, 'Added', 'Removed')[0])
 
-        else:
-            linktype.append('Production')
-            l1, m1 = calculate_overlap_stats(x_list[i-1], n_ct, max_links, met_ID)[2:]
-            l2, m2 = calculate_overlap_stats(x_list[i], n_ct, max_links, met_ID)[2:]
+    if i_change < max_links:
+        linktype.append('Consumption')
+        ct = i_change//MAX_ID_metabolites
+        l1, m1 = calculate_overlap_stats(x_list[i-1], n_ct, max_links, met_ID)[:2]
+        l2, m2 = calculate_overlap_stats(x_list[i], n_ct, max_links, met_ID)[:2]
 
-        d1 = {m: l for m, l in zip(m1, l1)}
-        d2 = {m: l for m, l in zip(m2, l2)}
-        lc_temp = []
-        for s in (d2.items() ^ d1.items()):
-            lc_temp.append(s)
-            test.append(len((d2.items() ^ d1.items())))
-        
-        if len(lc_temp) > 1:
-            final_lc = np.where(changetype[-1] == 'Added', list(compress(lc_temp, [s in d2.items() for s in lc_temp])),
-                                list(compress(lc_temp, [s in d1.items() for s in lc_temp])))
-            linkchange.append([s[1] for s in final_lc])
-        else:
-            linkchange.append([s[1] for s in lc_temp])
+    else:
+        linktype.append('Production')
+        ct = (i_change - max_links)//MAX_ID_metabolites
+        l1, m1 = calculate_overlap_stats(x_list[i-1], n_ct, max_links, met_ID)[2:]
+        l2, m2 = calculate_overlap_stats(x_list[i], n_ct, max_links, met_ID)[2:]
 
-    i_valid = np.array([np.where(len(l) == 0, False, True) for l in linkchange])
-    df = pd.DataFrame({'LinkType': list(compress(linktype, i_valid)),
-                                      'ChangeType': list(compress(changetype, i_valid)),
-                                      'Overlap': [len(l[0]) for l in list(compress(linkchange, i_valid))],
-                                      'RMSEdiff': np.diff(elist)[i_valid]})
+    d1 = {m: l for m, l in zip(m1, l1)}
+    d2 = {m: l for m, l in zip(m2, l2)}
+    lc_temp = []
+    for s in (d2.items() ^ d1.items()):
+        lc_temp.append(s)
+        test.append(len((d2.items() ^ d1.items())))
+    
+    if len(lc_temp) > 1:
+        final_lc = np.where(changetype[-1] == 'Added',
+                            list(compress(lc_temp, [s in d2.items() for s in lc_temp])),
+                            list(compress(lc_temp, [s in d1.items() for s in lc_temp])))
+        linkchange.append([s[1] for s in final_lc])
+    elif len(lc_temp) == 0:
+        linkchange.append(ct+1)   
+    else:
+        linkchange.append([s[1] for s in lc_temp])
 
-    linklen = df['Overlap'].values
-    df.loc[:, 'OverlapLen'] = (1 + (linklen/2)).astype(int)
-    df.loc[:, 'RMSEType'] = np.where(df['RMSEdiff'].values < 0, True, False)
-    linktype_error_df = pd.concat([linktype_error_df, df], ignore_index=True)
-linktype_error_df.loc[:, 'LogDiff'] = np.log10(linktype_error_df.loc[:, 'RMSEdiff'].abs())
+i_valid = np.array([np.where(len(l) == 0, False, True) for l in linkchange])
+df = pd.DataFrame({'LinkType': list(compress(linktype, i_valid)),
+                    'ChangeType': list(compress(changetype, i_valid)),
+                    'Link': [arr[0] for arr in list(compress(linkchange, i_valid))],
+                    # 'Overlap': [len(l[0]) for l in list(compress(linkchange, i_valid))],
+                    'RMSEdiff': np.diff(elist)[i_valid]})
+
+# linklen = df['Overlap'].values
+# df.loc[:, 'OverlapLen'] = (1 + (linklen/2)).astype(int)
+df.loc[:, 'RMSEType'] = np.where(df['RMSEdiff'].values < 0, True, False)
+df.loc[:, 'SimTime'] = np.arange(len(df))
+# df = df.reset_index(names='SimTime').astype({'SimTime': int})
+# linktype_error_df = pd.concat([linktype_error_df, df], ignore_index=True)
+# linktype_error_df.loc[:, 'LogDiff'] = np.log10(linktype_error_df.loc[:, 'RMSEdiff'].abs())
 
 # %%
 g = sns.catplot(data=linktype_error_df, x='OverlapLen', y='LogDiff', kind='box',
@@ -928,6 +943,28 @@ g = sns.catplot(data=linktype_error_df, x='OverlapLen', y='LogDiff', kind='box',
             row='LinkType', col='ChangeType',
             margin_titles=True)
 g.set_titles(row_template="{row_name} links", col_template="Links {col_name}")
-g.set(ylabel=r'$log_{10}\ (\Delta$RMSE)', xlabel='Overlap length')
+g.set(ylabel=r'$log_{10}\ (\Delta$ RMSE)', xlabel='Overlap length')
 # g.set(yscale='log')
+
+# %%
+# g, ax = plt.subplots(figsize=(12, 7))
+with sns.axes_style('darkgrid'):
+    df_con = df[df['LinkType']=='Consumption']
+    df_pro = df[df['LinkType']=='Production']
+    g = sns.catplot(data=df,
+                    x='SimTime', y='RMSEdiff', kind='bar',
+                    hue='ChangeType', palette={'Added': 'tab:green', 'Removed': 'tab:red'},
+                    row='LinkType', margin_titles=True,
+                    aspect=2, height=4)
+    g.tick_params(axis='x', labelsize=10, size=0)
+    for c1, data in zip(g.axes.flat, [df_pro, df_con]):
+        for c2, ltype in zip(c1.containers, ['Removed', 'Added']):
+            c1.bar_label(c2, labels=data[data['ChangeType']==ltype]['Link'].values,
+                        padding=1.5, rotation=90, fontsize=SMALL_SIZE,
+                        label_type='edge')
+            c1.margins(0.01)
+    g.set_titles(row_template="{row_name}")
+    g.set(ylabel=r'$\Delta$ RMSE', xlabel='Add/remove step')
+
+    # g.tight_layout()
 # %%

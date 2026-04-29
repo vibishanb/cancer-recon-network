@@ -468,10 +468,10 @@ else:
 # %%
 ##### Figure 4
 for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: '):#np.arange(0, 1):
-        for n_ct in np.arange(3, 4):
+        for n_ct in np.arange(4, 5):
             figsave_flag = 0
-            reward = 0.5
-            penalty = 0.5
+            reward = 0.0
+            penalty = 0.05
             cl = sublinear_cell_lines[k]
             ec_real = ec_metabolome.loc[:, cl]
 
@@ -491,7 +491,8 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
             final_residual = np.array([arr[-1] for arr in residual_list])
 
             pred_error_change = init_pred_error - final_pred_error
-            i_best_net = np.where(pred_error_change == pred_error_change.max())[0] #np.where(final_pred_error == final_pred_error.min())[0]
+            i_best_net = np.where(pred_error_change == pred_error_change.max())[0] #
+            # i_best_net = np.where(final_pred_error == final_pred_error.min())[0]
             x_ori_best = x_ori_list[i_best_net].flatten()
             x_optim_best = x_optim_list[i_best_net].flatten()
 
@@ -502,26 +503,26 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
             ax3 = fig.add_subplot(gs[1, 1], sharex=ax2)
 
             #### A quick glance of where sims have begun and ended
-            # colors = np.where(balance_flag_list, 'b', 'tab:red')
+            colors = np.where(balance_flag_list, 'b', 'tab:red')
             for i in range(n_reps):
-                # sns.lineplot(log_bias_list[i], ax=ax1, color=colors[i])
-                log_bias = np.array(log_bias_list[i]).astype(float)
-                norm_log_bias = log_bias/log_bias.sum()
-                lines = colored_line(con_overlap_list[i], prod_overlap_list[i],
-                                    c=norm_log_bias, ax=ax1, cmap='Greens', alpha=0.6, zorder=1)
+                sns.lineplot(log_bias_list[i], ax=ax1, color=colors[i])
+                # log_bias = np.array(log_bias_list[i]).astype(float)
+                # norm_log_bias = log_bias/log_bias.sum()
+                # lines = colored_line(con_overlap_list[i], prod_overlap_list[i],
+                #                     c=norm_log_bias, ax=ax1, cmap='Greens', alpha=0.6, zorder=1)
 
-            con_overlap_final = np.array([arr[-1] for arr in con_overlap_list])
-            prod_overlap_final = np.array([arr[-1] for arr in prod_overlap_list])
-            final_error = np.array([arr[-1] for arr in log_bias_list])
-            ax1.scatter(x=con_overlap_final, y=prod_overlap_final,
-                        s=35, c=final_error, cmap='Greens', alpha=0.9, zorder=2)
-            ax1.set_xlabel("# consumption overlap")
-            ax1.set_ylabel("# production overlap")
-            ax1.set_title("%d replicate runs" % n_reps)
-            ax1.set_xlim(0, con_overlap_final.max()+5)
-            ax1.set_ylim(0, prod_overlap_final.max()+5)
-            ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
-            ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
+            # con_overlap_final = np.array([arr[-1] for arr in con_overlap_list])
+            # prod_overlap_final = np.array([arr[-1] for arr in prod_overlap_list])
+            # final_error = np.array([arr[-1] for arr in log_bias_list])
+            # ax1.scatter(x=con_overlap_final, y=prod_overlap_final,
+            #             s=35, c=final_error, cmap='Greens', alpha=0.9, zorder=2)
+            # ax1.set_xlabel("# consumption overlap")
+            # ax1.set_ylabel("# production overlap")
+            # ax1.set_title("%d replicate runs" % n_reps)
+            # ax1.set_xlim(0, con_overlap_final.max()+5)
+            # ax1.set_ylim(0, prod_overlap_final.max()+5)
+            # ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
+            # ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
 
             ##### Check out the best performing network
             p_arr_ori = np.array([i*j for i, j in zip(x_ori_best[max_links:].reshape(n_ct, -1), np.arange(1, n_ct+1).tolist())]).sum(0)
@@ -619,7 +620,7 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
             overlap_df = pd.DataFrame({'LinkType': np.concatenate([np.repeat('Consumption', len(num_con_overlap)), np.repeat('Production', len(num_prod_overlap))]),
                                        'Balance': np.concatenate([balance_flag_list, balance_flag_list]),
                                        'Overlap': np.concatenate([num_con_overlap, num_prod_overlap]),
-                                       'RMSE': np.concatenate([final_error, final_error])})
+                                       'RMSE': np.concatenate([final_pred_error, final_pred_error])})
             with sns.axes_style('darkgrid'):
                 f = sns.lmplot(data=overlap_df, x='Overlap', y='RMSE', row='LinkType',
                            hue='Balance', palette={False: 'r', True: 'b'},
@@ -749,8 +750,8 @@ num_final_heatmap = [[]]
 for cl in sublinear_cell_lines:
     rmse = []
     num_final = []
-    reward = 0.1
-    penalty = 0.1
+    reward = 0.
+    penalty = 0.01
     for n_ct in range(3, 6):
         # cl='A549-ATCC'
         pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/optim-net/'+cl
