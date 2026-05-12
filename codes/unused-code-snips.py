@@ -1275,3 +1275,101 @@
 # # ax[1, 0].scatter(initial_error, final_error, c='k', s=5)
 # ax3.set_xlabel('# metabolites predicted')
 # ax3.set_ylabel('Final RMSE')
+
+
+########## Unused functions from cancer-all-network-models.py
+# def generate_balance_part_network(net, bias_metabolome, ec_real):
+#     rnet = net.copy()
+#     rnet.iloc[:, -1] = 0
+#     # n_unused = (rnet.iloc[:, -1] == 0).sum() # Number of unused metabolites
+#     # n_edges = rnet.shape[0]
+
+#     rnet = generate_random_network(rnet, ec_real)
+#     balance = np.zeros(MAX_ID_celltypes)
+#     for i in range(1, MAX_ID_celltypes+1):
+#         net_temp = rnet[rnet['celltypes_ID']==i]
+#         i_consumed = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [2, 5]))[0]
+#         i_produced = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [3, 5]))[0]
+#         net_consumption = diet.values[i_consumed].sum()
+#         net_production = ec_real[i_produced].sum()
+#         balance[i-1] = net_production/net_consumption
+
+#     ## Balance calculation
+#     # b_low = 0.1
+#     # b_high = 1
+#     count = 0
+#     while (count <= 100) * (balance != 1).any():#((balance < b_low) + (balance > b_high)).any():
+#         balance_flag = False
+#         rnet = generate_random_network(rnet, ec_real)
+#         for i in range(1, MAX_ID_celltypes+1):
+#             net_temp = rnet[rnet['celltypes_ID']==i]
+#             i_consumed = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [2, 5]))[0]
+#             i_produced = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [3, 5]))[0]
+#             net_consumption = diet.values[i_consumed].sum()
+#             net_production = ec_real[i_produced].sum()
+#             balance[i-1] = net_production/net_consumption
+#         count += 1
+
+#     if count < 100: #((balance >= b_low) * (balance <= b_high)).all():
+#         balance_flag = True
+
+#     return rnet, balance_flag
+
+# def generate_random_network(rnet, ec_real):
+#     # rnet = net.copy()
+#     # # n_unused = (rnet.iloc[:, -1] == 0).sum() # Number of unused metabolites
+#     # # n_edges = rnet.shape[0]
+#     # i_consumption_edges = np.where(bias_metabolome > 0)[0]
+#     # i_production_edges = np.where(bias_metabolome < 0)[0]
+
+#     # con_edges = np.random.choice([0, 2], len(i_consumption_edges), replace=True)
+#     # pro_edges = np.random.choice([0, 3], len(i_production_edges), replace=True)
+#     # rnet.iloc[i_consumption_edges, -1] = con_edges.copy()
+#     # rnet.iloc[i_production_edges, -1] = pro_edges.copy()
+
+#     # if MAX_ID_celltypes > 1:    
+#     #     assigned_edges = rnet.iloc[:len(bias_metabolome), -1].values
+#     #     shuffled_edges = np.repeat(assigned_edges, MAX_ID_celltypes-1)
+#     #     shuffled_edges = np.random.permutation(shuffled_edges)
+        
+#     #     rnet.iloc[len(bias_metabolome):, -1] = shuffled_edges.copy()
+#         ## Production edges with partitioning
+
+#     quantiles = np.quantile(ec_real, np.linspace(0, 1, MAX_ID_celltypes+1)[1:-1])
+#     prod_celltypes = np.zeros_like(ec_real)
+#     for i in range(MAX_ID_celltypes-1):
+#         prod_celltypes = np.where(ec_real <= quantiles[i], prod_celltypes, prod_celltypes+1)
+#     prod_celltypes = np.int64(prod_celltypes + 1)
+
+#     # i_production = np.where(bias_metabolome < 0)[0]
+#     for i in range(1, MAX_ID_celltypes+1):
+#         # i_production = np.where(bias_metabolome < 0, True, False)
+#         i_ct_prod = np.where(prod_celltypes == i, True, False)
+#         n_pro = np.random.randint(1, np.max([i_ct_prod.sum(), 2]))
+#         i_final = np.random.choice(np.where(i_ct_prod)[0], n_pro, replace=True)
+#         pro_edges = np.random.choice([0, 3], len(i_final), replace=True)
+
+#         # i_consumption_edges = np.where(bias_metabolome > 0)[0]
+#         # con_edges = np.random.choice([0, 2], len(i_consumption_edges), replace=True)
+        
+#         ct_index = np.where(rnet.iloc[:, 0]==i)[0]
+#         rnet.iloc[ct_index[i_final], -1] = pro_edges.copy()
+#         # rnet.iloc[ct_index[i_consumption_edges], -1] = con_edges.copy()
+    
+#     pro_mets_final = rnet.iloc[np.where(rnet.iloc[:, -1]==3)[0], 2].values
+#     for i in range(1, MAX_ID_celltypes+1):
+#         ct_index = np.where(rnet.iloc[:, 0]==i)[0]
+#         n_con = np.random.randint(1, np.max([len(pro_mets_final), 2]))
+#         con_mets = np.random.choice(pro_mets_final, n_con, replace=True)
+#         i_con_edges = np.where(np.isin(rnet.iloc[ct_index, 2].values, con_mets))[0]
+#         rnet.iloc[ct_index[i_con_edges], -1] = np.where(rnet.iloc[ct_index[i_con_edges], -1] == 3, 5, 2)
+    
+#     # con_mets_final = rnet.iloc[np.where(rnet.iloc[:, -1]==2)[0], 2].values
+#     # prod_mets_final = np.where(rnet.iloc[:, -1]==3)[0]
+#     # for i in prod_mets_final:
+#     #     if np.isin(rnet.iloc[i, 2], con_mets_final):
+#     #         continue
+#     #     else:
+#     #         rnet.iloc[i, -1] = 0
+
+#     return rnet

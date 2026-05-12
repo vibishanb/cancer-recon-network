@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.12
 """
 <!---------------------------
 Name: cancer-recon-network
@@ -94,7 +95,7 @@ def get_network(net):
 
     return net_final, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites
 
-def calculate_metabolome_from_net(f, ct_hyp, diet, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
+def calculate_metabolome_from_net(f, ct_hyp, diet, net, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
     This is a function used to create sparse matrices made of metabolites and celltypes 
     where metabolite consumption and production is considered. The matrices created are "m2b" and "b2m":
@@ -118,7 +119,6 @@ def calculate_metabolome_from_net(f, ct_hyp, diet, net, in_degree_flag, MAX_ID_m
     row = net['celltypes'].iloc[valid_index]
     data = np.ones((len(valid_index),))
     b2m = csr_matrix( (data,(row,col)), shape=(MAX_ID_celltypes, MAX_ID_metabolites)).toarray()#.todense()
-
     if in_degree_flag:
         m2b = m2b/in_degree
     
@@ -139,7 +139,8 @@ def calculate_metabolome_from_net(f, ct_hyp, diet, net, in_degree_flag, MAX_ID_m
     i_nonzero = np.where(out_degree > 0)[0]
     inv_out_degree[i_nonzero] += f/out_degree[i_nonzero] # Secretion by each celltype is split equally between all the metabolites it secretes
     out_mult = np.matlib.repmat(inv_out_degree[:, np.newaxis], 1, MAX_ID_metabolites)
-    output_matrix = b2m * out_mult
+    b2m_rand = b2m * prod_rates_rand # trying out random production rate uniformly distributed in (0, 1) for each celltype-metabolite combination
+    output_matrix = b2m_rand * out_mult
 
     ###### Final metabolome-secreted + unused
     secreted_metabolome = np.dot(output_matrix.T, intake_vector)
@@ -150,7 +151,7 @@ def calculate_metabolome_from_net(f, ct_hyp, diet, net, in_degree_flag, MAX_ID_m
 
     return [m2b, b2m, metabolome_pred]
 
-def calc_pred_error(ct_hyp, net, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
+def calc_pred_error(ct_hyp, net, f, diet, ec_real, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
     pred_error is a function used to compute the logarithmic error between experimentally measured
     metagenome and predicted metagenome computed from the model for a certain nutrient intake. It relies on 
@@ -160,7 +161,7 @@ def calc_pred_error(ct_hyp, net, f, diet, ec_real, in_degree_flag, MAX_ID_metabo
     experimentally measured net gain in intracellular metabolome "ic_real".
     '''
 
-    m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_hyp, diet, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_hyp, diet, net, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
     
     i_nonzero = np.where((ec_pred * ec_real) > 0, True, False)
     i_filt = np.where((m2b.sum(0) > 0), True, False)
@@ -170,7 +171,7 @@ def calc_pred_error(ct_hyp, net, f, diet, ec_real, in_degree_flag, MAX_ID_metabo
     
     return pred_error
 
-def run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
+def run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
     ######## Initial cell type frequencies and empirically measured extracellular metabolome for cell line given by col_name
     ct0 = cellnum_init*celltypefreq.values
     ec_real = ec_metabolome[col_name].values
@@ -179,7 +180,7 @@ def run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degr
 
     ##### For max celltypes > 1, the model is converted into an optimization problem where the celltype frequencies are learned to minimize the logarithmic error between experimentally measured metabolome and predicted metabolome computed from the model for a certain up-sec network and initial cell type distribution.
     if MAX_ID_celltypes > 1:
-        my_args = (net, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+        my_args = (net, f, diet, ec_real, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
         bnds = ((cellnum_init, cellnum_max), ) * len(ct0)
         constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_max}
         res = minimize(calc_pred_error, ct0, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
@@ -190,7 +191,7 @@ def run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degr
         ct_final = cellnum_max*celltypefreq.values
     
     ######## Compute matrices and predicted metabolome from learnt celltype abundances
-    m2b, b2m, metabolome_pred_unfilt = calculate_metabolome_from_net(f, ct_final, diet, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    m2b, b2m, metabolome_pred_unfilt = calculate_metabolome_from_net(f, ct_final, diet, net, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
     metabolome_measured_unfilt = ec_real.copy()
 
     ### Taking out zeroes from the analysis
@@ -213,104 +214,8 @@ def run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degr
 
     return [ec_corr, ct_final, mean_error, metabolome_pred_unfilt, metabolome_measured_unfilt, i_final, bias_metabolome, n_predicted]#, slope_filt, intercept_filt
 
-def generate_random_network(rnet, ec_real):
-    # rnet = net.copy()
-    # # n_unused = (rnet.iloc[:, -1] == 0).sum() # Number of unused metabolites
-    # # n_edges = rnet.shape[0]
-    # i_consumption_edges = np.where(bias_metabolome > 0)[0]
-    # i_production_edges = np.where(bias_metabolome < 0)[0]
-
-    # con_edges = np.random.choice([0, 2], len(i_consumption_edges), replace=True)
-    # pro_edges = np.random.choice([0, 3], len(i_production_edges), replace=True)
-    # rnet.iloc[i_consumption_edges, -1] = con_edges.copy()
-    # rnet.iloc[i_production_edges, -1] = pro_edges.copy()
-
-    # if MAX_ID_celltypes > 1:    
-    #     assigned_edges = rnet.iloc[:len(bias_metabolome), -1].values
-    #     shuffled_edges = np.repeat(assigned_edges, MAX_ID_celltypes-1)
-    #     shuffled_edges = np.random.permutation(shuffled_edges)
-        
-    #     rnet.iloc[len(bias_metabolome):, -1] = shuffled_edges.copy()
-        ## Production edges with partitioning
-
-    quantiles = np.quantile(ec_real, np.linspace(0, 1, MAX_ID_celltypes+1)[1:-1])
-    prod_celltypes = np.zeros_like(ec_real)
-    for i in range(MAX_ID_celltypes-1):
-        prod_celltypes = np.where(ec_real <= quantiles[i], prod_celltypes, prod_celltypes+1)
-    prod_celltypes = np.int64(prod_celltypes + 1)
-
-    # i_production = np.where(bias_metabolome < 0)[0]
-    for i in range(1, MAX_ID_celltypes+1):
-        # i_production = np.where(bias_metabolome < 0, True, False)
-        i_ct_prod = np.where(prod_celltypes == i, True, False)
-        n_pro = np.random.randint(1, np.max([i_ct_prod.sum(), 2]))
-        i_final = np.random.choice(np.where(i_ct_prod)[0], n_pro, replace=True)
-        pro_edges = np.random.choice([0, 3], len(i_final), replace=True)
-
-        # i_consumption_edges = np.where(bias_metabolome > 0)[0]
-        # con_edges = np.random.choice([0, 2], len(i_consumption_edges), replace=True)
-        
-        ct_index = np.where(rnet.iloc[:, 0]==i)[0]
-        rnet.iloc[ct_index[i_final], -1] = pro_edges.copy()
-        # rnet.iloc[ct_index[i_consumption_edges], -1] = con_edges.copy()
-    
-    pro_mets_final = rnet.iloc[np.where(rnet.iloc[:, -1]==3)[0], 2].values
-    for i in range(1, MAX_ID_celltypes+1):
-        ct_index = np.where(rnet.iloc[:, 0]==i)[0]
-        n_con = np.random.randint(1, np.max([len(pro_mets_final), 2]))
-        con_mets = np.random.choice(pro_mets_final, n_con, replace=True)
-        i_con_edges = np.where(np.isin(rnet.iloc[ct_index, 2].values, con_mets))[0]
-        rnet.iloc[ct_index[i_con_edges], -1] = np.where(rnet.iloc[ct_index[i_con_edges], -1] == 3, 5, 2)
-    
-    # con_mets_final = rnet.iloc[np.where(rnet.iloc[:, -1]==2)[0], 2].values
-    # prod_mets_final = np.where(rnet.iloc[:, -1]==3)[0]
-    # for i in prod_mets_final:
-    #     if np.isin(rnet.iloc[i, 2], con_mets_final):
-    #         continue
-    #     else:
-    #         rnet.iloc[i, -1] = 0
-
-    return rnet
-
-def generate_balance_part_network(net, bias_metabolome, ec_real):
-    rnet = net.copy()
-    rnet.iloc[:, -1] = 0
-    # n_unused = (rnet.iloc[:, -1] == 0).sum() # Number of unused metabolites
-    # n_edges = rnet.shape[0]
-
-    rnet = generate_random_network(rnet, ec_real)
-    balance = np.zeros(MAX_ID_celltypes)
-    for i in range(1, MAX_ID_celltypes+1):
-        net_temp = rnet[rnet['celltypes_ID']==i]
-        i_consumed = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [2, 5]))[0]
-        i_produced = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [3, 5]))[0]
-        net_consumption = diet.values[i_consumed].sum()
-        net_production = ec_real[i_produced].sum()
-        balance[i-1] = net_production/net_consumption
-
-    ## Balance calculation
-    # b_low = 0.1
-    # b_high = 1
-    count = 0
-    while (count <= 100) * (balance != 1).any():#((balance < b_low) + (balance > b_high)).any():
-        balance_flag = False
-        rnet = generate_random_network(rnet, ec_real)
-        for i in range(1, MAX_ID_celltypes+1):
-            net_temp = rnet[rnet['celltypes_ID']==i]
-            i_consumed = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [2, 5]))[0]
-            i_produced = np.where(np.isin(net_temp.iloc[:MAX_ID_metabolites, -1], [3, 5]))[0]
-            net_consumption = diet.values[i_consumed].sum()
-            net_production = ec_real[i_produced].sum()
-            balance[i-1] = net_production/net_consumption
-        count += 1
-
-    if count < 100: #((balance >= b_low) * (balance <= b_high)).all():
-        balance_flag = True
-
-    return rnet, balance_flag
-
 ####### Error function for GutCP-based algorithm
-def pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, col_name, diet, in_degree_flag, cellnum_init, cellnum_max, pred_params):
+def pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, col_name, diet, prod_rates_rand, in_degree_flag, cellnum_init, cellnum_max, pred_params):
     '''
     pred_error_addingLinks is a function used to compute the rms error between experimentally measured
     metagenome and predicted metagenome computed from the model for a certain nutrient intake. It relies on 
@@ -346,7 +251,7 @@ def pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, col_name, 
     n_changed = len(np.where(net.iloc[:, -1].values != net_ori.iloc[:, -1].values)[0])
 
     ## RMSE calculation for all celltypes
-    ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_pred_new = run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    ec_corr, ct_full, mean_error, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_pred_new = run_network_model(f, diet, col_name, cellnum_init, cellnum_max, net, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
     ## Collapse into a single celltype and calculate RMSE for that
     ## This is being done by taking all the consumption and production links across celltypes and assigning them to the first celltype, while keeping the other celltypes as dummy placeholders. This makes it easier to calculate the RMSE for the combined network in place without having to reassign MAX_ID_celltypes and other celltype number-specific function arguments.
@@ -370,7 +275,7 @@ def pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, col_name, 
 
     net_combined = pd.concat([net_consumption, net_production])
     ct_final = np.concatenate([[cellnum_max], np.zeros(MAX_ID_celltypes-1)]).flatten() # Assumed final celltype distribution reflecting a single celltype
-    m2b_combined, b2m_combined, metabolome_pred_combined = calculate_metabolome_from_net(f, ct_final, diet, net_combined, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    m2b_combined, b2m_combined, metabolome_pred_combined = calculate_metabolome_from_net(f, ct_final, diet, net_combined, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
     i_nonzero = np.where((metabolome_pred_combined * ec_real) > 0, True, False)
     i_filt = np.where((m2b_combined.sum(0) > 0), True, False)
     i_final = i_nonzero * i_filt
@@ -480,8 +385,8 @@ def run_network_optimisation(all_params):
 
     # Save original network features and prediction errors
     # net_ori, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net_raw)
-
-    m2b, b2m, met_pred = calculate_metabolome_from_net(f, ct0, diet, net_ori, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    prod_rates_rand = np.random.uniform(low=0., high=2., size=MAX_ID_celltypes*MAX_ID_metabolites).reshape((MAX_ID_celltypes, MAX_ID_metabolites))
+    m2b, b2m, met_pred = calculate_metabolome_from_net(f, ct0, diet, net_ori, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
     ####### Keep a record of the original network
     m2b_ori = (m2b!=0).astype(int).copy()
     b2m_ori = (b2m!=0).astype(int).copy()
@@ -509,7 +414,7 @@ def run_network_optimisation(all_params):
         balance[i] = net_production/net_consumption
     residual_init = np.abs(balance - 1).sum() # This residual term will be zero when the balance becomes 1 for all celltypes
 
-    error_before, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias_init, log_bias_combined_init, n_pred, residual_init, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x_ori, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params)
+    error_before, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias_init, log_bias_combined_init, n_pred, residual_init, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x_ori, net_ori, f, cl, diet, prod_rates_rand, in_degree_flag, cellnum_init, cellnum_final, pred_params)
     metabolome_pred_list.append(metabolome_pred)
     metabolome_measured_list.append(metabolome_measured)
     valid_index_list.append(i_final)
@@ -551,7 +456,7 @@ def run_network_optimisation(all_params):
         else:
             continue
 
-        error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, log_bias_combined, n_pred, residual_after, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, cl, diet, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
+        error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, log_bias_combined, n_pred, residual_after, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, cl, diet, prod_rates_rand, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
         prior_prob = calculate_priors(bias_metabolome, prod_celltypes)
 
         if (n_pred >= 3) * ((error_before - error_after) >= 0.001):#* (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
@@ -1026,10 +931,13 @@ for n_ct in range(4, 5):
 max_links = n_ct*MAX_ID_metabolites
 met_ID = diet.index.to_numpy()
 in_degree_flag = False
+prod_rates_rand = np.random.lognormal(mean=0, sigma=1.5,
+                                          size=max_links).reshape((n_ct, MAX_ID_metabolites))
 
 source = np.arange(n_ct)
 ov_len = np.arange(2, n_ct+1)
-ov_mean_error_pooled, ov_fraction_pooled, network_index_pooled = [[]], [[]], [[]]
+ov_mean_error_pooled, ov_fraction_pooled, network_index_pooled, pro_con_pooled = [], [], [], []
+ov_links_pooled, ov_mets_pooled, best_worst_pooled, linktype_pooled, some_error = [], [], [], [], []
 for i_net in tqdm(np.where(balance_flag_list==True)[0], desc='Replicate: '):
     ov_networks = []
     pro_con_list = []
@@ -1037,6 +945,8 @@ for i_net in tqdm(np.where(balance_flag_list==True)[0], desc='Replicate: '):
     net_ori = all_networks[i_net]
     net_production = net_ori.iloc[max_links:, :]
     net_consumption = net_ori.iloc[:max_links, :]
+    # prod_rates_rand = np.random.uniform(low=0.01, high=2,
+    #                                     size=len(net_production)).reshape((MAX_ID_celltypes, MAX_ID_metabolites))
 
     for s in source:
         all_targets = [[]]
@@ -1050,6 +960,7 @@ for i_net in tqdm(np.where(balance_flag_list==True)[0], desc='Replicate: '):
 
         ref_net = net_consumption.copy()
         consumed_mets = ref_net.iloc[np.where((ref_net['celltypes']==s)*(ref_net['edgeType']==2))[0], 0].values
+        consumed_mets = consumed_mets[ec_real[consumed_mets]!=0]
         for met in consumed_mets:
             for target in all_targets:
                 current_links = ref_net.iloc[:, -1].values
@@ -1059,16 +970,17 @@ for i_net in tqdm(np.where(balance_flag_list==True)[0], desc='Replicate: '):
                 ov_networks.append(net_final.copy())
                 pro_con_list.append('Consumption')
         
-        # ref_net = net_production.copy()
-        # produced_mets = ref_net.iloc[np.where((ref_net['celltypes']==s)*(ref_net['edgeType']==3))[0], 0].values
-        # for met in produced_mets:
-        #     for target in all_targets:
-        #         current_links = ref_net.iloc[:, -1].values
-        #         net_test = ref_net.copy()
-        #         net_test.loc[:, 'edgeType'] = np.where(np.isin(net_test['celltypes'], target)*(net_test['metabolites']==met), 3, current_links)
-        #         net_final = pd.concat([net_consumption, net_test])
-        #         ov_networks.append(net_final.copy())
-        #         pro_con_list.append('Production')
+        ref_net = net_production.copy()
+        produced_mets = ref_net.iloc[np.where((ref_net['celltypes']==s)*(ref_net['edgeType']==3))[0], 0].values
+        produced_mets = produced_mets[ec_real[produced_mets]!=0]
+        for met in produced_mets:
+            for target in all_targets:
+                current_links = ref_net.iloc[:, -1].values
+                net_test = ref_net.copy()
+                net_test.loc[:, 'edgeType'] = np.where(np.isin(net_test['celltypes'], target)*(net_test['metabolites']==met), 3, current_links)
+                net_final = pd.concat([net_consumption, net_test])
+                ov_networks.append(net_final.copy())
+                pro_con_list.append('Production')
 
     # #### This was a brief trial to check if the single-overlap networks assembled above actually have the overlaps we wanted using the independently-coded calculate_overlap_stats function--this validation has been done and the code is working as expected as of Apr 29, 2026
 
@@ -1084,52 +996,217 @@ for i_net in tqdm(np.where(balance_flag_list==True)[0], desc='Replicate: '):
     # met_ID = diet.index.to_numpy()
     # calculate_overlap_stats(x, n_ct, max_links, met_ID)
 
-    # for ltype in ['Consumption', 'Production']:
-    ov_mean_error_all = []
-    ov_fraction = []
-    network_index = []
-    networks = list(compress(ov_networks, np.where(np.array(pro_con_list) == ltype, True, False)))
-    for fr in np.linspace(0.1, 1, 5):
-        size = int(fr * len(networks))
-        chosen_indices = np.random.choice(np.arange(len(networks)), size=size)
-        for k in chosen_indices:
-            ec, ct, mean_error, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_predicted = run_network_model(f, diet, cl, cellnum_init, cellnum_final, networks[k], in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
-            ov_mean_error_all.append(mean_error)
-            ov_fraction.append(fr)
-            network_index.append(k)
+    ov_mean_error = []
+    for ltype in ['Consumption', 'Production']:
+        # ov_fraction = []
+        # network_index = []
+        i_networks = np.where(np.array(pro_con_list) == ltype)[0]#list(compress(ov_networks, np.where(np.array(pro_con_list) == ltype, True, False)))
+        for fr in np.linspace(0.1, 1, 5):
+            size = int(fr * len(i_networks))
+            chosen_indices = np.random.choice(i_networks, size=size)
+            for k in chosen_indices:
+                ec, ct, ov_err, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_predicted = run_network_model(f, diet, cl, cellnum_init, cellnum_final, ov_networks[k], prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 
-        ec, ct, mean_error, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_predicted = run_network_model(f, diet, cl, cellnum_init, cellnum_final, net_ori, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+                ov_mean_error.append(ov_err)
+                ov_fraction_pooled.append(fr)
+                network_index_pooled.append(k)
+                pro_con_pooled.append(ltype)
 
-        ov_mean_error_pooled.append(ov_mean_error_all - mean_error)
+            ec, ct, mean_error, metabolome_pred, metabolome_measured, i_final, bias_metabolome, n_predicted = run_network_model(f, diet, cl, cellnum_init, cellnum_final, net_ori, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+            ov_mean_error_pooled = np.concatenate([ov_mean_error_pooled, np.array(ov_mean_error - mean_error)])
 
-        # ov_mean_error_all = np.array(ov_mean_error_all)
+            if fr == 1.0:
+                ov_mean_error = np.array(ov_mean_error - mean_error)
+                i_best = chosen_indices[np.where(ov_mean_error == ov_mean_error.min())[0][-1]]
+                i_worst = chosen_indices[np.where(ov_mean_error == ov_mean_error.max())[0][-1]]
+            
+                net_test = ov_networks[i_best]
+                ct0 = cellnum_init * celltypefreq.values
+                m2b, b2m, met_pred = calculate_metabolome_from_net(f, ct0, diet, net_test, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+                    
+                m2b = (m2b!=0).astype(int).copy()
+                b2m = (b2m!=0).astype(int).copy()
+                x = np.concatenate([m2b.flatten(), b2m.flatten()]) # This is the adjacency matrix
+                if ltype == 'Consumption':
+                    l, m = calculate_overlap_stats(x, n_ct, max_links, met_ID)[:2]
+                else:
+                    l, m = calculate_overlap_stats(x, n_ct, max_links, met_ID)[2:]
+                ov_links_pooled.append(l[0])
+                ov_mets_pooled.append(m[0])
+                best_worst_pooled.append('Best')
+                linktype_pooled.append(ltype)
+                some_error.append(ov_mean_error.min())
 
+                net_test = ov_networks[i_worst]
+                ct0 = cellnum_init * celltypefreq.values
+                m2b, b2m, met_pred = calculate_metabolome_from_net(f, ct0, diet, net_test, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+                    
+                m2b = (m2b!=0).astype(int).copy()
+                b2m = (b2m!=0).astype(int).copy()
+                x = np.concatenate([m2b.flatten(), b2m.flatten()]) # This is the adjacency matrix
+                if ltype == 'Consumption':
+                    l, m = calculate_overlap_stats(x, n_ct, max_links, met_ID)[:2]
+                else:
+                    l, m = calculate_overlap_stats(x, n_ct, max_links, met_ID)[2:]
+                ov_links_pooled.append(l[0])
+                ov_mets_pooled.append(m[0])
+                best_worst_pooled.append('Worst')
+                linktype_pooled.append(ltype)
+                some_error.append(ov_mean_error.max())
 
-
+            ov_mean_error = []
 
 # %%
-ov_error_df = pd.DataFrame({'Fraction': ov_fraction,
-                            'Index': network_index,
-                            'DelRMSE': ov_mean_error_all-mean_error})
+ov_error_df = pd.DataFrame({'Fraction': ov_fraction_pooled,
+                        'Ltype': pro_con_pooled,
+                        'Index': network_index_pooled,
+                        'DelRMSE': ov_mean_error_pooled})
+with sns.axes_style('whitegrid'):
+    g = sns.catplot(data=ov_error_df, x='Fraction', y='DelRMSE',
+                row='Ltype', row_order=['Consumption', 'Production'],
+                kind='violin', sharey=False)
+    g.set_ylabels(r'$\Delta$ RMSE')
+    g.set_titles(row_template="{row_name} overlap")
+    g.tight_layout()
 
-sns.violinplot(data=ov_error_df, x='Fraction', y='DelRMSE')
-plt.title(ltype+' overlap')
-plt.show()
+ov_links_df = pd.DataFrame({'Link': ov_links_pooled,
+                            'Mets': ov_mets_pooled,
+                            'NetType': best_worst_pooled,
+                            'LinkType': linktype_pooled})
+mets_order = np.array(diet.sort_values(inplace=False).index) # IDs of overlapping metabolites sorted by their abundances in the fresh medium
+mets_ranks = np.arange(len(mets_order)) # Assigning ranks to the sorted metabolites
+ov_links_df.loc[:, 'MetRanks'] = np.array([mets_ranks[np.where(i == mets_order)[0]][0] for i in ov_links_df['Mets'].values]) # Mapping metabolite IDs in the dataframe to ranks based on fresh medium abundaces
+
+unique_indices = np.unique(ov_links_df['Link'].values) # All unique overlaps
+index_len = np.array([len(i) for i in unique_indices]) # How many celltypes in each overlap
+unique_indices_sorted = [[]]
+for i in range(3, n_ct + n_ct - 1 + 1): # Range limits based on the string length for n_ct celltype overlap e.g., '1+2' is a string of length 3, '1+2+3' is of length 5, so this goes as n + (n-1), where n is the number of overlapping celltypes. The extra plus one is to account for the range function not including the last number
+    if len(unique_indices[index_len == i]) > 0: # If there is an overlap of this length
+        unique_indices_sorted.append(unique_indices[index_len == i]) # Retrieving all overlaps of a given length this way sorts the unique elements of that particular length
+unique_indices_sorted = np.concatenate(unique_indices_sorted[1:])
+
+ov_links_df['Link'] = pd.Categorical(ov_links_df['Link'], categories=unique_indices_sorted) # This sets the column to categorical with the levels in the order above, giving 2-celltype overlaps first, then three and so on, and sorted by celltype number within each overlap length
+
+
+h = sns.displot(data=ov_links_df, x='MetRanks', kind='hist',
+                hue='LinkType', palette={'Consumption': 'tab:green',
+                                                        'Production': 'tab:blue'},
+                row='NetType',
+                multiple='stack', stat='probability', common_norm=False, 
+                discrete=True, height=2, aspect=4)
+h.tick_params(axis='x', labelrotation=60)
+h.set_xlabels('Abundance rank')
+
+h = sns.displot(data=ov_links_df, x='Link', kind='hist',
+                hue='LinkType', palette={'Consumption': 'tab:green',
+                                                        'Production': 'tab:blue'},
+                row='NetType',
+                multiple='stack', stat='probability', common_norm=False, 
+                discrete=True, shrink=0.9, height=2, aspect=3)
+h.tick_params(axis='x', labelrotation=60)
+h.set_xlabels('Overlapping link')
 
 # %%
-min_error = ov_error_df.groupby(['Fraction'])[['DelRMSE']].min().values.flatten()
-max_error = ov_error_df.groupby(['Fraction'])[['DelRMSE']].max().values.flatten()
-
-net_test = ov_networks[37]
+##### Check out the best and worst performing overlaps
+### Original network prediction-no overlaps
+# i_net = 65
+net_test = all_networks[i_net]
 ct0 = cellnum_init * celltypefreq.values
-m2b, b2m, met_pred = calculate_metabolome_from_net(f, ct0, diet, net_test, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
-    
+m2b, b2m, met_pred_ori = calculate_metabolome_from_net(f, ct0, diet, net_test, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
 m2b = (m2b!=0).astype(int).copy()
 b2m = (b2m!=0).astype(int).copy()
-x = np.concatenate([m2b.flatten(), b2m.flatten()]) # This is the adjacency matrix
-    
-max_links = n_ct*MAX_ID_metabolites
-met_ID = diet.index.to_numpy()
-calculate_overlap_stats(x, n_ct, max_links, met_ID)
+x_ori = np.concatenate([m2b.flatten(), b2m.flatten()]) # This is the adjacency matrix
+
+ec_ori, ct_ori, mean_error_ori, met_pred_ori, met_meas_ori, i_final_ori, bias_metabolome_ori, n_predicted_ori = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], all_networks[i_net], prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+
+### Picking networks with the best and worst single consumption and production overlaps
+con_df = ov_error_df[(ov_error_df['Fraction']==1)*(ov_error_df['Ltype']=='Consumption')]
+pro_df = ov_error_df[(ov_error_df['Fraction']==1)*(ov_error_df['Ltype']=='Production')]
+
+i_con_best = con_df.iloc[np.where(con_df['DelRMSE'] == con_df['DelRMSE'].min())[0], 2].values[-1] # Best single consumption overlap
+i_con_worst = con_df.iloc[np.where(con_df['DelRMSE'] == con_df['DelRMSE'].max())[0], 2].values[-1] # Worst single consumption overlap
+i_pro_best = pro_df.iloc[np.where(pro_df['DelRMSE'] == pro_df['DelRMSE'].min())[0], 2].values[0] # Best single production overlap
+i_pro_worst = pro_df.iloc[np.where(pro_df['DelRMSE'] == pro_df['DelRMSE'].max())[0], 2].values[-1] # Best single production overlap
+
+### Best single consumption overlap
+for k, i in enumerate([i_con_best, i_con_worst, i_pro_best, i_pro_worst]):
+    net_ov = ov_networks[i]
+    ct0 = cellnum_init * celltypefreq.values
+    m2b, b2m, met_pred_ov = calculate_metabolome_from_net(f, ct0, diet, net_ov, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+
+    m2b = (m2b!=0).astype(int).copy()
+    b2m = (b2m!=0).astype(int).copy()
+    x_ov = np.concatenate([m2b.flatten(), b2m.flatten()]) # This is the adjacency matrix
+
+    ec_ov, ct_ov, mean_error_ov, met_pred_ov, met_meas_ov, i_final_ov, bias_metabolome_ov, n_predicted_ov = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_ov, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    i_before = i_final_ori.astype(bool)
+    i_after = i_final_ov.astype(bool)
+
+    p_arr_ori = np.array([i*j for i, j in zip(x_ori[max_links:].reshape(n_ct, -1), np.arange(1, n_ct+1).tolist())]).sum(0)
+    p_arr_ov = np.array([i*j for i, j in zip(x_ov[max_links:].reshape(n_ct, -1), np.arange(1, n_ct+1).tolist())]).sum(0)
+    c_before = np.where(p_arr_ori == 0, 'tab:gray', np.where(p_arr_ori == 1, 'b', 
+                        np.where(p_arr_ori == 2, 'g',
+                                np.where(p_arr_ori == 3, 'darkorchid', 
+                                        np.where(p_arr_ori == 4, 'saddlebrown', 
+                                                np.where(p_arr_ori == 5, 'goldenrod',
+                                                            np.where(p_arr_ori == 6, 'black', 'tab:pink')))))))
+    ori_list = x_ori[:max_links].reshape(n_ct, -1)
+    overlap_colours_before = np.array([np.where(ori_list[:, i].sum() > 1, 'overlap', 'no') for i in range(MAX_ID_metabolites)])
+    c_before[overlap_colours_before == 'overlap'] = 'tab:red'
+
+    # c_before = np.where(i_before, c_before, 'tab:gray')
+    c_after = np.where(p_arr_ov == 0, 'tab:gray', np.where(p_arr_ov == 1, 'b', 
+                        np.where(p_arr_ov == 2, 'g',
+                                np.where(p_arr_ov == 3, 'darkorchid', 
+                                        np.where(p_arr_ov == 4, 'saddlebrown', 
+                                                np.where(p_arr_ov == 5, 'goldenrod',
+                                                            np.where(p_arr_ov == 6, 'black', 'tab:pink')))))))
+    if k < 2:
+        ov_list = x_ov[:max_links].reshape(n_ct, -1)
+        overlap_colours_after = np.array([np.where(ov_list[:, i].sum() > 1, 'overlap', 'no') for i in range(MAX_ID_metabolites)])
+        c_after[overlap_colours_after == 'overlap'] = 'tab:red'
+
+        a_before = np.where(i_final_ori, 0.8, 0.1)
+        a_after = np.where(i_final_ov,
+                        np.where(overlap_colours_after == 'overlap', 1, 0.2), 0.)
+
+        s_after = np.where(overlap_colours_after == 'overlap', 80, 40)
+        edgecolor_before = np.where(overlap_colours_before == 'overlap', 'k', c_before)
+        edgecolor_after = np.where(overlap_colours_after == 'overlap', 'k', c_after)
+
+    else:
+        c_after = np.array(['tab:grey']*len(c_before))
+        ov_list = x_ov[max_links:].reshape(n_ct, -1)
+        overlap_colours_after = np.array([np.where(ov_list[:, i].sum() > 1, 'overlap', 'no') for i in range(MAX_ID_metabolites)])
+        c_after[overlap_colours_after == 'overlap'] = 'tab:red'
+
+        a_before = np.where(i_final_ori, 0.8, 0.1)
+        a_after = np.where(i_final_ov,
+                        np.where(overlap_colours_after == 'overlap', 1, 0.2), 0.)
+
+        s_after = np.where(overlap_colours_after == 'overlap', 100, 40)
+        edgecolor_before = np.where(overlap_colours_before == 'overlap', 'k', c_before)
+        edgecolor_after = np.where(overlap_colours_after == 'overlap', 'k', c_after)
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(4, 6))
+    ax1.scatter(np.log10(met_pred_ori), np.log10(met_meas_ori), c=c_before, alpha=a_before, s=50, edgecolors=edgecolor_before)
+    ax1.axline((-2, -2), (3, 3), c='k', transform=ax1.transAxes)
+    ax1.text(1.02, 0.5, 'Original', size=SMALL_SIZE, rotation='vertical', va='center', transform=ax1.transAxes)
+    # ax2.text(0.05, 0.8, r'$\chi_{excess}=$'+f'{init_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax2.transAxes)
+    # ax2.set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
+    ax1.set_ylabel(r'$log_{10}\ Data$', size=SMALL_SIZE)
+    ax1.text(0.05, 0.9, f'RMSE = {mean_error_ori.round(decimals=3):.2f}', transform=ax1.transAxes)
+
+    ax2.scatter(np.log10(met_pred_ov), np.log10(met_meas_ov), c=c_after, alpha=a_after, s=s_after, edgecolors=edgecolor_after)
+    ax2.axline((-2, -2), (2, 2), c='k', transform=ax2.transAxes)
+    ax2.text(1.02, 0.5, f'{ov_links_pooled[k]}', size=SMALL_SIZE, rotation='vertical', va='center', transform=ax2.transAxes)
+    ax2.text(0.05, 0.9, f'RMSE = {mean_error_ov.round(decimals=3):.2f}', transform=ax2.transAxes)
+    # ax2.text(0.05, 0.8, r'$\chi_{excess}=$'+f'{final_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax3.transAxes)
+    ax2.set_xlabel(r'$log_{10}\ Prediction$')
+    ax2.set_ylabel(r'$log_{10}\ Data$', size=SMALL_SIZE)
+
+    fig.suptitle(f'{linktype_pooled[k]}'+' overlap-'+f'{best_worst_pooled[k]}')
+    fig.tight_layout(pad=0.6)
+    fig.show()
 
 # %%
