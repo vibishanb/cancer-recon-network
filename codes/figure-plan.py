@@ -470,8 +470,8 @@ else:
 for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: '):#np.arange(0, 1):
         for n_ct in np.arange(4, 5):
             figsave_flag = 0
-            reward = 0.0
-            penalty = 0.05
+            reward = 0.5
+            penalty = 0.5
             cl = sublinear_cell_lines[k]
             ec_real = ec_metabolome.loc[:, cl]
 
@@ -503,9 +503,9 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
             ax3 = fig.add_subplot(gs[1, 1], sharex=ax2)
 
             #### A quick glance of where sims have begun and ended
-            colors = np.where(balance_flag_list, 'b', 'tab:red')
+            # colors = np.where(balance_flag_list, 'b', 'tab:red')
             for i in range(n_reps):
-                sns.lineplot(log_bias_list[i], ax=ax1, color=colors[i])
+                sns.lineplot(log_bias_list[i], ax=ax1, color='b')
                 # log_bias = np.array(log_bias_list[i]).astype(float)
                 # norm_log_bias = log_bias/log_bias.sum()
                 # lines = colored_line(con_overlap_list[i], prod_overlap_list[i],
@@ -554,12 +554,12 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
             # c_after = np.where(i_after, c_after, 'tab:gray')
 
             ori_list = x_ori_best[max_links:].reshape(n_ct, -1)
-            overlap_colours_before = np.array([np.where(ori_list[:, i].sum() > 1, 'overlap', 'no') for i in range(115)])
+            overlap_colours_before = np.array([np.where(ori_list[:, i].sum() > 1, 'overlap', 'no') for i in range(89)])
             c_before[overlap_colours_before == 'overlap'] = 'tab:red'
 
 
             optim_list = x_optim_best[max_links:].reshape(n_ct, -1)
-            overlap_colours_after = np.array([np.where(optim_list[:, i].sum() > 1, 'overlap', 'no') for i in range(115)])
+            overlap_colours_after = np.array([np.where(optim_list[:, i].sum() > 1, 'overlap', 'no') for i in range(89)])
             c_after[overlap_colours_after == 'overlap'] = 'tab:red'
 
             a_before = np.where(i_before, 0.8, 0.1)
@@ -608,22 +608,22 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
             for x in x_optim_list:
                 ## Production overlap
                 optim_list = x[max_links:].reshape(n_ct, -1)
-                prod_overlap = np.array([optim_list[:, i].sum() for i in range(115)])
+                prod_overlap = np.array([optim_list[:, i].sum() for i in range(89)])
                 num_prod_overlap.append(len(prod_overlap[prod_overlap > 1]))
                 
                 ## Consumption overlap
                 optim_list = x[:max_links].reshape(n_ct, -1)
-                con_overlap = np.array([optim_list[:, i].sum() for i in range(115)])
+                con_overlap = np.array([optim_list[:, i].sum() for i in range(89)])
                 num_con_overlap.append(len(con_overlap[con_overlap > 1]))
             num_con_overlap, num_prod_overlap = np.array(num_con_overlap), np.array(num_prod_overlap)
             
             overlap_df = pd.DataFrame({'LinkType': np.concatenate([np.repeat('Consumption', len(num_con_overlap)), np.repeat('Production', len(num_prod_overlap))]),
-                                       'Balance': np.concatenate([balance_flag_list, balance_flag_list]),
+                                    #    'Balance': np.concatenate([balance_flag_list, balance_flag_list]),
                                        'Overlap': np.concatenate([num_con_overlap, num_prod_overlap]),
                                        'RMSE': np.concatenate([final_pred_error, final_pred_error])})
             with sns.axes_style('darkgrid'):
                 f = sns.lmplot(data=overlap_df, x='Overlap', y='RMSE', row='LinkType',
-                           hue='Balance', palette={False: 'r', True: 'b'},
+                        #    hue='Balance', palette={False: 'r', True: 'b'},
                            line_kws={'linewidth': 2}, scatter_kws={'s': 15},
                            facet_kws=dict(sharex=False))
                 f.set_xlabels('')
@@ -699,7 +699,7 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
                 h.set_xlabels('Abundance rank')
                 sns.move_legend(h, "lower center", bbox_to_anchor=(0.67, 0.7), ncol=2,
                                 title='Link type', frameon=True)
-                plt.xlim(-5, 120)
+                plt.xlim(-5, 95)
             if figsave_flag:
                 h.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-overlapping-metabolites.png', dpi=300)
                 plt.close(h.figure)

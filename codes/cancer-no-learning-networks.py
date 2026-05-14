@@ -272,7 +272,7 @@ cellnum_init_all = cellnum_init_all[i_sublinear]
 cellnum_final_all = cellnum_final_all[i_sublinear]
 
 net_state = 'no-learn-balanced-net/'
-for n_ct in [2, 7]:
+for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
     n_rand = 100
     n_reps = 150
     # npro_arr = np.repeat(np.array([50])[np.newaxis, :], n_reps*2, axis=1).ravel()

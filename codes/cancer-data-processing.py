@@ -37,23 +37,11 @@ print(celltype.head())
 ########### Load extracellular metabolome for all cell lines
 ec_metabolome_all = pd.read_excel('../input-data/jain-data/metabolome-jain.xlsx', sheet_name='ec_metabolites')
 core_data_all = pd.read_excel('../input-data/jain-data/metabolome-jain.xlsx', sheet_name='CORE_profile')
+ec_metabolome_all = ec_metabolome_all.iloc[np.where(ec_metabolome_all['Calibrated'] > 0 )[0], :]
+core_data_all = core_data_all.iloc[np.where(core_data_all['Calibrated'] > 0 )[0], :]
 
-i_valid_mets = np.where(ec_metabolome_all['Calibrated'] > 0 )[0]
-valid_met_IDs = ec_metabolome_all['metabolites_ID'].iloc[i_valid_mets].to_numpy()
-ec_metabolome = ec_metabolome_all.iloc[i_valid_mets, :]
-
-i_valid_cell_lines = np.where(np.isin(core_data_all.columns, ec_metabolome.columns))[0]
-core_data = core_data_all.iloc[i_valid_mets, i_valid_cell_lines]
-ec_metabolome_ID = ec_metabolome['metabolites_ID']
-print(ec_metabolome.head())
-print('-----------------------------------------------')
-print(core_data.head())
-
-
-# %%
-################# Mass balance checks on the ec-metabolome
-met_test = ec_metabolome.copy()
-mw = met_test.iloc[:, 3]
+met_test = ec_metabolome_all.copy()
+mw = met_test.loc[:, 'MW']
 met_test = met_test.iloc[:, 4:]
 met_test.columns = met_test.columns.str.split('.').str[0]
 met_test = met_test.T.reset_index(names=['Cell line'])
@@ -62,6 +50,25 @@ met_test_mean = met_test.groupby(['Cell line']).mean().T
 met_baseline = met_test_mean.iloc[:, np.isin(met_test_mean.columns, ['Baseline1', 'Baseline2', 'Baseline3', 'Baseline4', 'Baseline5'])]
 met_test_mean = met_test_mean.iloc[:, ~np.isin(met_test_mean.columns, ['Baseline1', 'Baseline2', 'Baseline3', 'Baseline4', 'Baseline5'])]
 
+i_nonzero_ec = np.array([np.where(met_test_mean.loc[:, cl] > 0, True, False) for cl in met_test_mean.columns]).all(axis=0)
+i_nonzero_diet = np.array([np.where(met_baseline.loc[:, cl] > 0, True, False) for cl in met_baseline.columns]).all(axis=0)
+i_nonzero_mets = i_nonzero_diet * i_nonzero_ec
+
+valid_met_IDs = ec_metabolome_all['metabolites_ID'].iloc[i_nonzero_mets].to_numpy()
+ec_metabolome = ec_metabolome_all.iloc[i_nonzero_mets, :]
+met_test_mean = met_test_mean.iloc[i_nonzero_mets, :]
+met_baseline = met_baseline.iloc[i_nonzero_mets, :]
+
+i_valid_cell_lines = np.where(np.isin(core_data_all.columns, ec_metabolome.columns))[0]
+core_data = core_data_all.iloc[i_nonzero_mets, i_valid_cell_lines]
+ec_metabolome_ID = ec_metabolome['metabolites_ID']
+print(ec_metabolome.head())
+print('-----------------------------------------------')
+print(core_data.head())
+
+
+# %%
+################# Mass balance checks on the ec-metabolome
 baseline_mass = met_baseline.mul(mw, axis=0).sum(axis=0).to_numpy()/10**6
 test_mass = met_test_mean.mul(mw, axis=0).sum(axis=0).to_numpy()/10**6
 
@@ -140,7 +147,7 @@ for i in range(n_lines):
     all_networks.append(curr_net)
 
 ## Only un-comment if using more than one cell type
-k = 7 # Final number of cell types assumed for the current iteration of the model
+k = 4 # Final number of cell types assumed for the current iteration of the model
 ## Update celltype_IDs and all recon networks for the final number of cell types assumed
 celltype_all = pd.read_csv('../input-data/prior-celltype-abundance.txt', sep=',')
 celltype_all = celltype_all.iloc[:k, ] # Selecting number of cell types

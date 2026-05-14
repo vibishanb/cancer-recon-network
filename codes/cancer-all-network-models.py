@@ -324,7 +324,7 @@ def pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, col_name, 
 
     penalty_param = pred_params['penalty']
     reward_param = pred_params['reward']
-    pred_errorTotal = mean_error - np.where(n_pred_new > n_pred_init, reward_param, -penalty_param) #+ np.where(residual_new != 0, penalty_param * np.log10(residual_new), 0) #np.where(residual_init > residual_new, penalty_param, -reward_param) #- (inter_diff*reward_param) + (non_inter_diff*penalty_param)
+    pred_errorTotal = mean_error - np.where(n_pred_new >= n_pred_init, reward_param, -penalty_param) #+ np.where(residual_new != 0, penalty_param * np.log10(residual_new), 0) #np.where(residual_init > residual_new, penalty_param, -reward_param) #- (inter_diff*reward_param) + (non_inter_diff*penalty_param)
     # + (penalty_param * n_non_inter) - (reward_param * n_inter)
     
     return [pred_errorTotal, metabolome_pred, metabolome_measured, i_final, bias_metabolome, mean_error, mean_error_combined, n_pred_new, residual_new, num_prod_overlap, num_con_overlap]
@@ -385,7 +385,7 @@ def run_network_optimisation(all_params):
 
     # Save original network features and prediction errors
     # net_ori, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net_raw)
-    prod_rates_rand = np.random.uniform(low=0., high=2., size=MAX_ID_celltypes*MAX_ID_metabolites).reshape((MAX_ID_celltypes, MAX_ID_metabolites))
+    prod_rates_rand = np.random.lognormal(mean=0., sigma=1., size=MAX_ID_celltypes*MAX_ID_metabolites).reshape((MAX_ID_celltypes, MAX_ID_metabolites))
     m2b, b2m, met_pred = calculate_metabolome_from_net(f, ct0, diet, net_ori, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
     ####### Keep a record of the original network
     m2b_ori = (m2b!=0).astype(int).copy()
@@ -459,7 +459,7 @@ def run_network_optimisation(all_params):
         error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, log_bias_combined, n_pred, residual_after, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, cl, diet, prod_rates_rand, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
         prior_prob = calculate_priors(bias_metabolome, prod_celltypes)
 
-        if (n_pred >= 3) * ((error_before - error_after) >= 0.001):#* (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
+        if (n_pred >= 3) * ((error_after - error_before) <= -0.01):#* (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
             error_before = error_after
             error_list.append(error_before)
             prior_list.append(prior_prob[[i_x]])
@@ -636,8 +636,8 @@ for n_ct in range(4, 5):
         cellnum_final = cellnum_final_all[i_cell_line]
         bias = np.log10(ec_metabolome.iloc[:, i_cell_line].values + 1e-6) - np.log10(diet.values + 1e-6)
 
-        reward_arr = np.array([0.])
-        penalty_arr = np.array([0.05])
+        reward_arr = np.array([0.5])
+        penalty_arr = np.array([0.5])
 
         in_degree_flag = False
 
@@ -657,9 +657,8 @@ for n_ct in range(4, 5):
             n_pred_list = [[]]
             residual_list = [[]]
             prod_overlap_list, con_overlap_list = [[]], [[]]
-            # balance_flag_list = []
 
-            i_balance = np.where(balance_flag_list)[0]
+            i_balance = np.where(balance_flag_list * np.where(rmse_arr_nct <= 0.9, True, False))[0] # np.where(balance_flag_list)[0]
             n_reps = len(i_balance)
             for i in i_balance:
                 all_params = np.array([f, cl,
@@ -782,8 +781,8 @@ n_reps = len(log_bias_list)
 
 init_error = np.array([arr[0] for arr in log_bias_list])
 final_error = np.array([arr[-1] for arr in log_bias_list])
-error_change = final_error - init_error
-i_best = np.where(final_error == final_error.min())[0]
+error_change = init_error - final_error
+i_best = np.where(error_change == error_change.max())[0] # np.where(final_error == final_error.min())[0]
 
 # for k in range(1):
 k = i_best[0]
@@ -843,7 +842,7 @@ df.loc[:, 'SimTime'] = np.arange(len(df))
 # linktype_error_df.loc[:, 'LogDiff'] = np.log10(linktype_error_df.loc[:, 'RMSEdiff'].abs())
 
 # %%
-g = sns.catplot(data=linktype_error_df, x='OverlapLen', y='LogDiff', kind='box',
+g = sns.catplot(data=linktype_error_df, x='OverlapLen', y='RMSEdiff', kind='box',
             hue='RMSEType', palette='crest', hue_norm=(0, 1),
             row='LinkType', col='ChangeType',
             margin_titles=True)
@@ -938,7 +937,7 @@ source = np.arange(n_ct)
 ov_len = np.arange(2, n_ct+1)
 ov_mean_error_pooled, ov_fraction_pooled, network_index_pooled, pro_con_pooled = [], [], [], []
 ov_links_pooled, ov_mets_pooled, best_worst_pooled, linktype_pooled, some_error = [], [], [], [], []
-for i_net in tqdm(np.where(balance_flag_list==True)[0], desc='Replicate: '):
+for i_net in tqdm(np.where(balance_flag_list==True)[0][:1], desc='Replicate: '):
     ov_networks = []
     pro_con_list = []
     # ref_net = all_networks[0].iloc[:max_links, :]
