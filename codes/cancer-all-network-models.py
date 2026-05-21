@@ -459,7 +459,7 @@ def run_network_optimisation(all_params):
         error_after, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias, log_bias_combined, n_pred, residual_after, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x, net_ori, f, cl, diet, prod_rates_rand, in_degree_flag, cellnum_init, cellnum_final, pred_params) # Calculate prediction error with the modified network
         prior_prob = calculate_priors(bias_metabolome, prod_celltypes)
 
-        if (n_pred >= 3) * ((error_after - error_before) <= -0.01):#* (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
+        if (n_pred >= 3) * ((error_after - error_before) <= -0.025):#* (np.random.uniform(0,1,1)[0] < np.exp((error_before-error_after)/kT)): # If at least three metabolites are non-trivially predicted and the reduction in error is large enough, the proposed link addition/removal is accepted
             error_before = error_after
             error_list.append(error_before)
             prior_list.append(prior_prob[[i_x]])
@@ -636,8 +636,8 @@ for n_ct in range(4, 5):
         cellnum_final = cellnum_final_all[i_cell_line]
         bias = np.log10(ec_metabolome.iloc[:, i_cell_line].values + 1e-6) - np.log10(diet.values + 1e-6)
 
-        reward_arr = np.array([0.5])
-        penalty_arr = np.array([0.5])
+        reward_arr = np.array([0.2])
+        penalty_arr = np.array([0.2])
 
         in_degree_flag = False
 

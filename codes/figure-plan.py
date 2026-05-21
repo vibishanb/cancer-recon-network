@@ -470,8 +470,8 @@ else:
 for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: '):#np.arange(0, 1):
         for n_ct in np.arange(4, 5):
             figsave_flag = 0
-            reward = 0.5
-            penalty = 0.5
+            reward = 0.2
+            penalty = 0.2
             cl = sublinear_cell_lines[k]
             ec_real = ec_metabolome.loc[:, cl]
 
