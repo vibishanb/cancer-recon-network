@@ -140,19 +140,20 @@ Figure 1 has been generated using a self-contained script called cancer-power-la
 #### Data import
 # cl='A549-ATCC'
 # n_ct = 2
-for n_ct in tqdm(np.arange(2, 8), desc='N_CT: '):
-    for cl in tqdm(sublinear_cell_lines, desc='Cell line: '):
-        pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
+for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
+    for cl in tqdm(ec_metabolome.columns.to_numpy()[:-2], desc='Cell line: '):
 
+        pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
 
         [balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
                             rmse_arr_1ct, rmse_arr_nct,
                             ec_pred_arr_1ct, ec_pred_arr_nct,
                             index_arr_1ct, index_arr_nct,
+                            prod_rates_1ct, prod_rates_nct,
                             production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
         n_reps = len(balance_flag_arr)
         n_rand = 100
-        npro = 115
+        npro = len(ec_metabolome)
         ec_real = ec_metabolome.loc[:, cl].values
 
         net_state = 'no-learn-balanced-net/'
@@ -322,14 +323,15 @@ for n_ct in tqdm(np.arange(2, 8), desc='N_CT: '):
 
 #### Pooled pair plots
 rmse_pooled_1ct, rmse_pooled_nct, balance_flag_pooled, rep_num = [[]], [[]], [[]], [[]]
-slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
-for cl in sublinear_cell_lines:
+# slope_df, sublinear_cell_lines = pd.read_pickle(home_dir + '/cancer_power_law_stats.pickle')
+for cl in ec_metabolome.columns.to_numpy()[:-2]:
     pickle_path = '../raw-output/2-celltypes/no-learn-balanced-net/'+cl
 
     [balance_arr_1ct, balance_arr_nct, balance_flag_arr, balanced_networks_list,
                         rmse_arr_1ct, rmse_arr_nct,
                         ec_pred_arr_1ct, ec_pred_arr_nct,
                         index_arr_1ct, index_arr_nct,
+                        prod_rates_1ct, prod_rates_nct,
                         production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
     rmse_pooled_1ct.append(rmse_arr_1ct)
     rmse_pooled_nct.append(rmse_arr_nct)
@@ -342,8 +344,8 @@ balance_flag_pooled = np.array(balance_flag_pooled[1:])
 rep_num = np.array(rep_num[1:])
 
 n_rand = len(rmse_arr_1ct)
-
-df_pooled = pd.DataFrame({'Replicate': np.concatenate([np.arange(1, 3101), np.arange(1, 3101)]).ravel(),
+reps = len(rmse_pooled_1ct.ravel())
+df_pooled = pd.DataFrame({'Replicate': np.concatenate([np.arange(1, reps+1), np.arange(1, reps+1)]).ravel(),
                 'N_CT': np.array([np.ones_like(rmse_pooled_1ct), np.zeros_like(rmse_pooled_1ct)+2]).ravel().astype(int),
                 'Balance': np.concatenate([balance_flag_pooled, balance_flag_pooled]).ravel(),
                 'RMSE': np.concatenate([rmse_pooled_1ct, rmse_pooled_nct]).ravel()})
@@ -375,11 +377,11 @@ figsave_flag = 1
 rmse_arr_heatmap = [[]]
 num_final_heatmap = [[]]
 
-for cl in sublinear_cell_lines:
+for cl in ec_metabolome.columns.to_numpy()[:-2]:
     rmse = []
     num_final = []
     ec_real = ec_metabolome.loc[:, cl].values
-    for n_ct in range(2, 8):
+    for n_ct in range(2, 7):
         # cl='A549-ATCC'
         pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
 
@@ -387,6 +389,7 @@ for cl in sublinear_cell_lines:
                             rmse_arr_1ct, rmse_arr_nct,
                             ec_pred_arr_1ct, ec_pred_arr_nct,
                             index_arr_1ct, index_arr_nct,
+                            prod_rates_1ct, prod_rates_nct,
                             production_ct_arr_1ct, production_ct_arr_nct] = pd.read_pickle(pickle_path + '/balanced-networks.pickle')
         rmse.append(rmse_arr_nct[balance_flag_arr].mean())
         num_final.append(balance_flag_arr.sum())
@@ -437,8 +440,8 @@ rmse_arr_heatmap = np.array(rmse_arr_heatmap[1:])
 num_final_heatmap = np.array(num_final_heatmap[1:])
 
 heatmap_df = pd.DataFrame(rmse_arr_heatmap,
-                          columns=np.arange(2, 8),
-                          index=sublinear_cell_lines)
+                          columns=np.arange(2, 7),
+                          index=ec_metabolome.columns.to_numpy()[:-2])
 
 f, ax = plt.subplots(1, 1, figsize=(7.5, 15))
 ax = sns.heatmap(data=heatmap_df, cmap='crest')

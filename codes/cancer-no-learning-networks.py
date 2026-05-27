@@ -112,7 +112,7 @@ def net_from_x(x, MAX_ID_metabolites, MAX_ID_celltypes):
 
     return net
 
-def calculate_metabolome_from_net(f, ct_freq, diet, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
+def calculate_metabolome_from_net(f, ct_hyp, diet, net, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
     This is a function used to create sparse matrices made of metabolites and celltypes 
     where metabolite consumption and production is considered. The matrices created are "m2b" and "b2m":
@@ -120,7 +120,7 @@ def calculate_metabolome_from_net(f, ct_freq, diet, net, in_degree_flag, MAX_ID_
     (2) b2m is a matrix determines the nutrient secretion.
     Both matrices have rows representing cancer celltypes and columns representing metabolites.
     Two matrices are created based on (1) the metabolite consumption and production network which is 
-    encode in "net" as a dataframe, and (2) the hypothesised relative cell type frequencies "ct_freq". Those metabolites that are not taken up by any celltype are inherited as is from the diet supplied, while uptake of metabolites is assumed to be complete i.e., even if only a single celltype can take up a metabolite, it consumes all of it from the environment.
+    encode in "net" as a dataframe, and (2) the hypothesised relative cell type frequencies "ct_hyp". Those metabolites that are not taken up by any celltype are inherited as is from the diet supplied, while uptake of metabolites is assumed to be complete i.e., even if only a single celltype can take up a metabolite, it consumes all of it from the environment.
     '''
     #### A^in
     valid_index = np.where((net['edgeType']==2) | (net['edgeType']==5))[0]
@@ -135,13 +135,12 @@ def calculate_metabolome_from_net(f, ct_freq, diet, net, in_degree_flag, MAX_ID_
     col = net['metabolites'].iloc[valid_index]
     row = net['celltypes'].iloc[valid_index]
     data = np.ones((len(valid_index),))
-    b2m = csr_matrix((data,(row,col)), shape=(MAX_ID_celltypes, MAX_ID_metabolites)).toarray()#.todense()
-
+    b2m = csr_matrix( (data,(row,col)), shape=(MAX_ID_celltypes, MAX_ID_metabolites)).toarray()#.todense()
     if in_degree_flag:
         m2b = m2b/in_degree
     
     ##### Intake matrix calculation
-    cellnum = np.matlib.repmat(ct_freq[:, np.newaxis], 1, MAX_ID_metabolites) 
+    cellnum = np.matlib.repmat(ct_hyp[:, np.newaxis], 1, MAX_ID_metabolites) 
     con_matrix = m2b*cellnum
     ### Normalising consumption of metabolites by the total number of consumers of each metabolite
     total_cellnum = con_matrix.sum(0)
@@ -157,7 +156,8 @@ def calculate_metabolome_from_net(f, ct_freq, diet, net, in_degree_flag, MAX_ID_
     i_nonzero = np.where(out_degree > 0)[0]
     inv_out_degree[i_nonzero] += f/out_degree[i_nonzero] # Secretion by each celltype is split equally between all the metabolites it secretes
     out_mult = np.matlib.repmat(inv_out_degree[:, np.newaxis], 1, MAX_ID_metabolites)
-    output_matrix = b2m * out_mult
+    b2m_rand = b2m * prod_rates_rand # trying out random production rate uniformly distributed in (0, 1) for each celltype-metabolite combination
+    output_matrix = b2m_rand * out_mult
 
     ###### Final metabolome-secreted + unused
     secreted_metabolome = np.dot(output_matrix.T, intake_vector)
@@ -168,20 +168,22 @@ def calculate_metabolome_from_net(f, ct_freq, diet, net, in_degree_flag, MAX_ID_
 
     return [m2b, b2m, metabolome_pred]
 
-def calc_pred_error(ct_freq, net, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
+def calc_pred_error(ct_hyp, net, f, diet, ec_real, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
     pred_error is a function used to compute the logarithmic error between experimentally measured
     metagenome and predicted metagenome computed from the model for a certain nutrient intake. It relies on 
     (1) diet: the nutrient intake, (2) i_intake: IDs of the nutrient intake, (3) m2b_total: a conversion matrix 
-    from the nutrient intake to the total biomass, and (4) ct_freq: hypothesised relative cell type frequenices. The 
+    from the nutrient intake to the total biomass, and (4) ct_hyp: hypothesised relative cell type frequenices. The 
     first three is used to compute the net gain in the intracellular metabolome predicted by the model "ic_pred" and compare it with the 
     experimentally measured net gain in intracellular metabolome "ic_real".
     '''
 
-    m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_freq, diet, net, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+    m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_hyp, diet, net, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
     
-    i_nonzero = np.where((ec_pred * ec_real) > 0)[0]
-    diff = np.log10(ec_pred[i_nonzero]) - np.log10(ec_real[i_nonzero]) # / np.log10(ec_real[i_nonzero])
+    i_nonzero = np.where((ec_pred * ec_real) > 0, True, False)
+    i_filt = np.where((m2b.sum(0) > 0), True, False)
+    i_final = i_nonzero * i_filt
+    diff = np.log10(ec_pred[i_final]) - np.log10(ec_real[i_final]) # / np.log10(ec_real[i_nonzero])
     pred_error = np.sqrt(np.mean(diff**2)) #np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
     
     return pred_error
@@ -272,7 +274,7 @@ cellnum_init_all = cellnum_init_all[i_sublinear]
 cellnum_final_all = cellnum_final_all[i_sublinear]
 
 net_state = 'no-learn-balanced-net/'
-for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
+for n_ct in tqdm([2, 3, 4, 5, 6], desc='n_ct: '):
     n_rand = 100
     n_reps = 150
     # npro_arr = np.repeat(np.array([50])[np.newaxis, :], n_reps*2, axis=1).ravel()
@@ -288,6 +290,7 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
         index_arr_1ct, index_arr_nct = [[]], [[]]
         production_ct_arr_1ct, production_ct_arr_nct = [[]], [[]]
         consumption_ct_arr_1ct, consumption_ct_arr_nct = [[]], [[]]
+        prod_rates_1ct, prod_rates_nct = [[]], [[]]
         nct_arr = []
         final_nets_arr = []
         balanced_networks_list = []
@@ -300,6 +303,7 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
 
             net, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(all_networks[j])
             max_links = MAX_ID_celltypes * MAX_ID_metabolites
+            prod_rates_rand = np.random.lognormal(mean=0., sigma=1., size=1*MAX_ID_metabolites).reshape((1, MAX_ID_metabolites))
             npro = MAX_ID_metabolites
             
             ### Random starting network with one celltype
@@ -316,7 +320,7 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
             ct_final = cellnum_final_all[j]*celltypefreq.values
 
             ### Calculate predicted metabolome for the single celltype
-            m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_1ct, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes=1)
+            m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_1ct, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes=1)
             cf_final = ct_final[0]/ct_final.sum()
 
             i_nonzero = np.where(ec_pred * ec_real, True, False)
@@ -337,10 +341,12 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
             production_ct_arr_1ct.append(p_arr)
             consumption_ct_arr_1ct.append(c_arr)
             balance_arr_1ct.append(balance)
+            prod_rates_1ct.append(prod_rates_rand)
             
             ### Splitting the above one celltype into a network with n_ct celltypes
             # n_ct = 4
             max_links = MAX_ID_metabolites*n_ct
+            prod_rates_rand = np.random.lognormal(mean=0., sigma=1., size=n_ct*MAX_ID_metabolites).reshape((n_ct, MAX_ID_metabolites))
 
             quantiles = np.quantile(ec_real, np.linspace(0, 1, n_ct+1)[1:-1])
             prod_celltypes = np.zeros_like(ec_real)
@@ -402,14 +408,14 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
 
             ### Learn the best celltype frequency
             ct_final = np.zeros_like(ct0_nct) # Final cell number, either fitted or taken depending on number of cell types
-            my_args = (net_nct, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, n_ct)
+            my_args = (net_nct, f, diet, ec_real, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, n_ct)
             bnds = ((0, cellnum_final_all[j]), ) * len(ct0_nct)
             constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_final_all[j]}
             res = minimize(calc_pred_error, ct0_nct, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
             ct_final = res.x
             
             ### Calculate predicted metabolome using the fitted celltype frequencies
-            m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_nct, in_degree_flag, MAX_ID_metabolites, n_ct)
+            m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_nct, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, n_ct)
 
             #### Production-consumption balance for the two celltype network
             ## Balance calculation
@@ -450,14 +456,14 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
 
                 ### Learn the best celltype frequency
                 ct_final = np.zeros_like(ct0_nct)
-                my_args = (net_nct, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, n_ct)
+                my_args = (net_nct, f, diet, ec_real, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, n_ct)
                 bnds = ((0, cellnum_final_all[j]), ) * len(ct0_nct)
                 constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_final_all[j]}
                 res = minimize(calc_pred_error, ct0_nct, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
                 ct_final = res.x #res.x.max()/cellnum_max
                 
                 ### Calculate predicted metabolome using the fitted celltype frequencies
-                m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_nct, in_degree_flag, MAX_ID_metabolites, n_ct)
+                m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_nct, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, n_ct)
 
                 #### Recalculate production-consumption balance
                 balance = np.zeros(n_ct)
@@ -482,14 +488,14 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
 
             ### Learn the best celltype frequency
             ct_final = np.zeros_like(ct0_nct) # Final cell number, either fitted or taken depending on number of cell types
-            my_args = (net_nct, f, diet, ec_real, in_degree_flag, MAX_ID_metabolites, n_ct)
+            my_args = (net_nct, f, diet, ec_real, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, n_ct)
             bnds = ((0, cellnum_final_all[j]), ) * len(ct0_nct)
             constraint = {'type': 'eq', 'fun': lambda ct: ct.sum() - cellnum_final_all[j]}
             res = minimize(calc_pred_error, ct0_nct, args=my_args, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
             ct_final = res.x #res.x.max()/cellnum_max
             
             ### Calculate predicted metabolome using the fitted celltype frequencies
-            m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_nct, in_degree_flag, MAX_ID_metabolites, n_ct)
+            m2b, b2m, ec_pred = calculate_metabolome_from_net(f, ct_final, diet, net_nct, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, n_ct)
             cf_final = ct_final/ct_final.sum()
 
             i_nonzero = np.where(ec_pred * ec_real, True, False)
@@ -509,6 +515,7 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
             production_ct_arr_nct.append(p_arr)
             consumption_ct_arr_nct.append(c_arr)
             balanced_networks_list.append(net_nct)
+            prod_rates_nct.append(prod_rates_rand)
 
         ec_pred_arr_1ct, ec_pred_arr_nct = np.array(ec_pred_arr_1ct[1:]), np.array(ec_pred_arr_nct[1:])
         index_arr_1ct, index_arr_nct = np.array(index_arr_1ct[1:]), np.array(index_arr_nct[1:])
@@ -519,6 +526,7 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
         n_produced_arr_1ct, n_produced_arr_nct = np.array(n_produced_arr_1ct), np.array(n_produced_arr_nct)
         balance_flag_arr = np.array(balance_flag_arr)
         balance_arr_1ct, balance_arr_nct = np.array(balance_arr_1ct), np.array(balance_arr_nct[1:])
+        prod_rates_1ct, prod_rates_nct = np.array(prod_rates_1ct[1:]), np.array(prod_rates_nct[1:])
 
         pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/'+net_state+sublinear_cell_lines[j]
         try:
@@ -531,6 +539,7 @@ for n_ct in tqdm([2, 3, 4], desc='n_ct: '):
                     rmse_arr_1ct, rmse_arr_nct,
                     ec_pred_arr_1ct, ec_pred_arr_nct,
                     index_arr_1ct, index_arr_nct,
+                    prod_rates_1ct, prod_rates_nct,
                     production_ct_arr_1ct, production_ct_arr_nct], pickle_out, protocol=2)
         pickle_out.close()
 
