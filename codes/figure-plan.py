@@ -471,7 +471,7 @@ else:
 # %%
 ##### Figure 4
 for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: '):#np.arange(0, 1):
-        for n_ct in np.arange(4, 5):
+        for n_ct in np.arange(5, 6):
             figsave_flag = 0
             reward = 0.2
             penalty = 0.2
@@ -496,6 +496,7 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
             pred_error_change = init_pred_error - final_pred_error
             i_best_net = np.where(pred_error_change == pred_error_change.max())[0] #
             # i_best_net = np.where(final_pred_error == final_pred_error.min())[0]
+            i_best_net = np.array([0])
             x_ori_best = x_ori_list[i_best_net].flatten()
             x_optim_best = x_optim_list[i_best_net].flatten()
 
