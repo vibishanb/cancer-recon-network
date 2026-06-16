@@ -198,37 +198,38 @@ for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
             plt.show()
 
 
-        if n_ct == 2:
-            prod_df = pd.DataFrame({'Xpro_CT1': balance_arr_nct[:, 0],
-                                    'Xpro_CT2': balance_arr_nct[:, 1],
-                                    'RMSE': rmse_arr_nct})
-            q = sns.scatterplot(data=prod_df, x='Xpro_CT1', y='Xpro_CT2',
-                                hue = 'RMSE', palette='flare',#sizes=(50, 200),
-                        # hue='N_produced', palette='crest',
-                        edgecolor= 'face', alpha = 0.8, s=75)
-            q.set_xscale('log')
-            q.set_yscale('log')
-            q.set_xlabel(r'$\chi_{production, CT1}$')
-            q.set_ylabel(r'$\chi_{production, CT2}$')
-            q.axvspan(xmin=0.1, xmax=1, alpha=0.2, color='tab:green')
-            q.axhspan(ymin=0.1, ymax=1, alpha=0.2, color='tab:green')
-            # q.axhline(y=1, linestyle='dashed', c='tab:green')
-            # q.text(0.9, 0.38, r'$y=1$', c='tab:green', transform=g.transAxes)
-            # q.axvline(x=1, linestyle='dashed', c='tab:green')
-            # q.text(0.68, 0.87, r'$x=1$', c='tab:green', rotation='vertical', transform=g.transAxes)
+        # if n_ct == 2:
+        #     prod_df = pd.DataFrame({'Xpro_CT1': balance_arr_nct[:, 0],
+        #                             'Xpro_CT2': balance_arr_nct[:, 1],
+        #                             'RMSE': rmse_arr_nct})
+        #     q = sns.scatterplot(data=prod_df, x='Xpro_CT1', y='Xpro_CT2',
+        #                         hue = 'RMSE', palette='flare',#sizes=(50, 200),
+        #                 # hue='N_produced', palette='crest',
+        #                 edgecolor= 'face', alpha = 0.8, s=75)
+        #     q.set_xscale('log')
+        #     q.set_yscale('log')
+        #     q.set_xlabel(r'$\chi_{production, CT1}$')
+        #     q.set_ylabel(r'$\chi_{production, CT2}$')
+        #     q.axvspan(xmin=0.1, xmax=1, alpha=0.2, color='tab:green')
+        #     q.axhspan(ymin=0.1, ymax=1, alpha=0.2, color='tab:green')
+        #     # q.axhline(y=1, linestyle='dashed', c='tab:green')
+        #     # q.text(0.9, 0.38, r'$y=1$', c='tab:green', transform=g.transAxes)
+        #     # q.axvline(x=1, linestyle='dashed', c='tab:green')
+        #     # q.text(0.68, 0.87, r'$x=1$', c='tab:green', rotation='vertical', transform=g.transAxes)
 
-        else:
-            prod_df = pd.DataFrame(balance_arr_nct, columns=np.arange(1, n_ct+1)).join(pd.Series(rmse_arr_nct, name='RMSE')).melt(id_vars='RMSE', value_name='Balance', var_name='N_CT')
+        # else:
+        prod_df = pd.DataFrame(balance_arr_nct, columns=np.arange(1, n_ct+1)).join(pd.Series(rmse_arr_nct, name='RMSE')).melt(id_vars='RMSE', value_name='Balance', var_name='N_CT')
 
-            q = sns.scatterplot(data=prod_df, x='Balance', y='RMSE',
-                                hue = 'N_CT', palette='flare',#sizes=(50, 200),
-                        # hue='N_produced', palette='crest',
-                        edgecolor= 'face', alpha = 0.8, s=75)
-            q.set_xscale('log')
-            q.axvspan(xmin=0.1, xmax=1, alpha=0.2, color='tab:green')
-            # q.set_yscale('log')
-            q.set_xlabel(r'$\chi_{production}$')
-            q.set_ylabel('RMSE')
+        q = sns.scatterplot(data=prod_df, x='Balance', y='RMSE',
+                            style = 'N_CT', markers=True, # palette='flare',#sizes=(50, 200),
+                    # hue='N_produced', palette='crest',
+                    edgecolor= 'k', alpha = 0.75, s=45)
+        q.set_xscale('log')
+        q.axvspan(xmin=0.1, xmax=1, alpha=0.2, color='tab:green')
+        # q.set_yscale('log')
+        q.set_xlabel(r'$\chi_{production}$')
+        q.set_ylabel('RMSE')
+        q.get_legend().set_title(r'$N_{CT}$')
 
 
         if figsave_flag:

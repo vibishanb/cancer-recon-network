@@ -1068,7 +1068,7 @@ for n_ct in range(2, 7):
             except:
                 pass
 
-            pickle_out = open(pickle_path + "/reward-"+str(reward)+"-penalty-"+str(penalty)+"-optimised_network_output.pickle", "wb")
+            pickle_out = open(pickle_path + "/reward-"+str(reward_arr[k])+"-penalty-"+str(penalty_arr[k])+"-optimised_network_output.pickle", "wb")
             #pickle.dump([net, i_selfish, i_intake, names], pickle_out)
             pickle.dump([x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, n_pred_list, residual_list, balance_flag_list, prod_overlap_list, con_overlap_list,
                         metabolome_pred_before_list, metabolome_meas_before_list,
