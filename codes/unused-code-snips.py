@@ -2128,3 +2128,112 @@
 # h.set_ylabels(r'$\%$ learnt links')
 # for ax in h.axes.flatten():
 #     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+# ##### Check out the best performing consumption and production overlaps for one replicate of balanced network-uncomment this code block only when running the above overlaps script for one replicate from balanced_networks_list; do this by adding an array index slice to the np.where statement in the for loop in line 646. For example, np.where(balance_flag_list == True)[0][1:2] would select the second replicate with balance from the original list.
+        # ### Original network prediction-no overlaps
+        # # i_net = 65
+        # net_test = all_networks[i_net]
+        # ct0 = cellnum_init * celltypefreq.values
+        # m2b, b2m, met_pred_ori = calculate_metabolome_from_net(f, ct0, diet, net_test, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+        # m2b = (m2b!=0).astype(int).copy()
+        # b2m = (b2m!=0).astype(int).copy()
+        # x_ori = np.concatenate([m2b.flatten(), b2m.flatten()]) # This is the adjacency matrix
+
+        # ec_ori, ct_ori, mean_error_ori, met_pred_ori, met_meas_ori, i_final_ori, bias_metabolome_ori, n_predicted_ori = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], all_networks[i_net], prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+
+        # ### Picking networks with the best single consumption and production overlaps
+        # con_df = ov_error_df[(ov_error_df['Fraction']==1)*(ov_error_df['Ltype']=='Consumption')]
+        # pro_df = ov_error_df[(ov_error_df['Fraction']==1)*(ov_error_df['Ltype']=='Production')]
+
+        # i_con_best = con_df.iloc[np.where(con_df['DelRMSE'] == con_df['DelRMSE'].min())[0], 2].values[-1] # Best single consumption overlap
+        # # i_con_worst = con_df.iloc[np.where(con_df['DelRMSE'] == con_df['DelRMSE'].max())[0], 2].values[-1] # Worst single consumption overlap
+        # i_pro_best = pro_df.iloc[np.where(pro_df['DelRMSE'] == pro_df['DelRMSE'].min())[0], 2].values[0] # Best single production overlap
+        # # i_pro_worst = pro_df.iloc[np.where(pro_df['DelRMSE'] == pro_df['DelRMSE'].max())[0], 2].values[-1] # Best single production overlap
+
+        # ### Best single consumption overlap
+        # for k, i in enumerate([i_con_best, i_pro_best]): #, i_con_worst, i_pro_best, i_pro_worst]):
+        #     net_ov = ov_networks[i]
+        #     ct0 = cellnum_init * celltypefreq.values
+        #     m2b, b2m, met_pred_ov = calculate_metabolome_from_net(f, ct0, diet, net_ov, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+
+        #     m2b = (m2b!=0).astype(int).copy()
+        #     b2m = (b2m!=0).astype(int).copy()
+        #     x_ov = np.concatenate([m2b.flatten(), b2m.flatten()]) # This is the adjacency matrix
+
+        #     ec_ov, ct_ov, mean_error_ov, met_pred_ov, met_meas_ov, i_final_ov, bias_metabolome_ov, n_predicted_ov = run_network_model(f, diet, cl, cellnum_init_all[0], cellnum_final_all[0], net_ov, prod_rates_rand, in_degree_flag, MAX_ID_metabolites, MAX_ID_celltypes)
+        #     i_before = i_final_ori.astype(bool)
+        #     i_after = i_final_ov.astype(bool)
+
+        #     p_arr_ori = np.array([i*j for i, j in zip(x_ori[max_links:].reshape(n_ct, -1), np.arange(1, n_ct+1).tolist())]).sum(0)
+        #     p_arr_ov = np.array([i*j for i, j in zip(x_ov[max_links:].reshape(n_ct, -1), np.arange(1, n_ct+1).tolist())]).sum(0)
+        #     c_before = np.where(p_arr_ori == 0, 'tab:gray', np.where(p_arr_ori == 1, 'b', 
+        #                         np.where(p_arr_ori == 2, 'g',
+        #                                 np.where(p_arr_ori == 3, 'darkorchid', 
+        #                                         np.where(p_arr_ori == 4, 'saddlebrown', 
+        #                                                 np.where(p_arr_ori == 5, 'goldenrod',
+        #                                                             np.where(p_arr_ori == 6, 'black', 'tab:pink')))))))
+        #     ori_list = x_ori[:max_links].reshape(n_ct, -1)
+        #     overlap_colours_before = np.array([np.where(ori_list[:, i].sum() > 1, 'overlap', 'no') for i in range(MAX_ID_metabolites)])
+        #     c_before[overlap_colours_before == 'overlap'] = 'tab:red'
+
+        #     # c_before = np.where(i_before, c_before, 'tab:gray')
+        #     c_after = np.where(p_arr_ov == 0, 'tab:gray', np.where(p_arr_ov == 1, 'b', 
+        #                         np.where(p_arr_ov == 2, 'g',
+        #                                 np.where(p_arr_ov == 3, 'darkorchid', 
+        #                                         np.where(p_arr_ov == 4, 'saddlebrown', 
+        #                                                 np.where(p_arr_ov == 5, 'goldenrod',
+        #                                                             np.where(p_arr_ov == 6, 'black', 'tab:pink')))))))
+        #     if k < 1:
+        #         ov_list = x_ov[:max_links].reshape(n_ct, -1)
+        #         overlap_colours_after = np.array([np.where(ov_list[:, i].sum() > 1, 'overlap', 'no') for i in range(MAX_ID_metabolites)])
+        #         c_after[overlap_colours_after == 'overlap'] = 'k'
+
+        #         ov_celltypes = np.where(ov_list[:, overlap_colours_after == 'overlap'])[0] + 1
+        #         a_before = np.where(i_final_ori, 0.8, 0.1)
+        #         a_after = np.where(i_final_ov,
+        #                         np.where(np.isin(p_arr_ov, ov_celltypes.min()), 0.8, 0.2), 0.)
+        #         a_after[overlap_colours_after == 'overlap'] = 0.8
+        #                         # np.where(overlap_colours_after == 'overlap', 1, 0.2), 0.)
+
+        #         s_after = np.where(overlap_colours_after == 'overlap', 80, 40)
+        #         edgecolor_before = np.where(overlap_colours_before == 'overlap', 'k', c_before)
+        #         edgecolor_after = np.where(overlap_colours_after == 'overlap', 'k', c_after)
+
+        #     else:
+        #         c_after = np.array(['tab:grey']*len(c_before))
+        #         ov_list = x_ov[max_links:].reshape(n_ct, -1)
+        #         overlap_colours_after = np.array([np.where(ov_list[:, i].sum() > 1, 'overlap', 'no') for i in range(MAX_ID_metabolites)])
+        #         c_after[overlap_colours_after == 'overlap'] = 'tab:red'
+
+        #         a_before = np.where(i_final_ori, 0.8, 0.1)
+        #         a_after = np.where(i_final_ov,
+        #                         np.where(overlap_colours_after == 'overlap', 1, 0.2), 0.)
+
+        #         s_after = np.where(overlap_colours_after == 'overlap', 100, 40)
+        #         edgecolor_before = np.where(overlap_colours_before == 'overlap', 'k', c_before)
+        #         edgecolor_after = np.where(overlap_colours_after == 'overlap', 'k', c_after)
+
+        #     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(3, 5))
+        #     ax1.scatter(np.log10(met_pred_ori), np.log10(met_meas_ori), c=c_before, alpha=a_before, s=50, edgecolors=edgecolor_before)
+        #     ax1.axline((-2, -2), (3, 3), c='k', transform=ax1.transAxes)
+        #     ax1.text(1.02, 0.5, 'Original', size=SMALL_SIZE, rotation='vertical', va='center', transform=ax1.transAxes)
+        #     # ax2.text(0.05, 0.8, r'$\chi_{excess}=$'+f'{init_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax2.transAxes)
+        #     # ax2.set_xlabel(r'$log_{10}\ Predicted\ metabolome$')
+        #     ax1.set_ylabel(r'$log_{10}\ Data$', size=SMALL_SIZE)
+        #     ax1.text(0.05, 0.9, f'RMSE = {mean_error_ori.round(decimals=3):.2f}', transform=ax1.transAxes)
+
+        #     ax2.scatter(np.log10(met_pred_ov), np.log10(met_meas_ov), c=c_after, alpha=a_after, s=s_after, edgecolors=edgecolor_after)
+        #     ax2.axline((-2, -2), (3, 3), c='k', transform=ax2.transAxes)
+        #     ax2.text(1.02, 0.5, f'{ov_links_pooled[k]}', size=SMALL_SIZE, rotation='vertical', va='center', transform=ax2.transAxes)
+        #     ax2.text(0.05, 0.9, f'RMSE = {mean_error_ov.round(decimals=3):.2f}', transform=ax2.transAxes)
+        #     # ax2.text(0.05, 0.8, r'$\chi_{excess}=$'+f'{final_residual[i_best_net][0].round(decimals=3):.2f}', transform=ax3.transAxes)
+        #     ax2.set_xlabel(r'$log_{10}\ Prediction$')
+        #     ax2.set_ylabel(r'$log_{10}\ Data$', size=SMALL_SIZE)
+
+        #     fig.suptitle(f'{linktype_pooled[k]}'+' overlap-'+f'{best_worst_pooled[k]}')
+        #     fig.tight_layout(pad=0.6)
+        #     if figsave_flag:
+        #         fig.savefig(fig_path + '/'+f'{best_worst_pooled[k]}'+'-'+f'{linktype_pooled[k]}'+'-metabolome-prediction-comparison.png', dpi=300)
+        #         plt.close(fig)
+        #     else:
+        #         fig.show()
