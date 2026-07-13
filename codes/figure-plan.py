@@ -91,7 +91,7 @@ def add_ct_legend_fig(fig, n_ct, title=r'$N_{CT}$'):
     from matplotlib.patches import Patch
     handles = [Patch(color=CT_COLOR_MAP[i+1], label=str(i+1)) for i in range(min(n_ct, len(CT_COLOR_MAP)))]
     # Slightly closer to the panels (x=0.99) and centered vertically (y=0.5)
-    leg = fig.legend(handles=handles, title=title, bbox_to_anchor=(0.99, 0.6), loc='center left',
+    leg = fig.legend(handles=handles, title=title, bbox_to_anchor=(0.99, 0.5), loc='center left',
                      bbox_transform=fig.transFigure, frameon=False, fontsize=SMALL_SIZE-3, title_fontsize=MEDIUM_SIZE-3)
     leg.set_zorder(10)
     return leg
@@ -200,7 +200,7 @@ figsave_flag = 1
 #### Data import
 # cl='A549-ATCC'
 # n_ct = 2
-for n_ct in tqdm(np.arange(6, 7), desc='N_CT: '):
+for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
     for cl in tqdm(ec_metabolome.columns.to_numpy()[:-2], desc='Cell line: '):
 
         pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
@@ -289,7 +289,7 @@ for n_ct in tqdm(np.arange(6, 7), desc='N_CT: '):
         q.axvspan(xmin=0.1, xmax=1, alpha=0.2, color='tab:green')
         # q.set_yscale('log')
         q.set_xlabel(r'$\chi_{production}$')
-        q.set_ylabel('RMSE')
+        q.set_ylabel('Prediction error')
         q.get_legend().set_title(r'$N_{CT}$')
 
 
@@ -495,7 +495,7 @@ else:
 with sns.axes_style("ticks"):
     g = sns.lineplot(data=heatmap_df.T, palette='Blues_d', legend=False)
     g.set_xlabel(r'$N_{CT}$')
-    g.set_ylabel('RMSE')
+    g.set_ylabel('Prediction error')
     g.set_title('Random networks w/o learning', pad=12)
 if figsave_flag:
     g.figure.savefig('../figures/no-learn-rmse-vs-nct-lineplot.png', dpi=300, bbox_inches='tight')
@@ -597,7 +597,6 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
                 plt.show()            
 
 # %%
-figsave_flag = 1
 MAX_ID_metabolites=89
 max_links = n_ct*MAX_ID_metabolites
 met_ID = diet.index.to_numpy()
@@ -615,13 +614,16 @@ for k in range(len(x_ori_list)):
     linktype = []
     changetype = []
     overlapmets = []
+    errorchange = []
     test = []
     x_list = x_all_list[k]
     elist = log_bias_list[k]
+    error_diff = elist - elist[0]
     for i in range(1, len(x_list)):
         x_diff = x_list[i] - x_list[i-1]
         i_change = np.where(x_diff != 0)[0]
-
+        errorchange.append(error_diff[i])
+        
         # for i_change in i_change_all:
         changetype.append(np.where(x_diff[i_change] > 0, 'Added', 'Removed')[0])
 
@@ -662,6 +664,9 @@ for k in range(len(x_ori_list)):
     df = pd.DataFrame({'LinkType': list(compress(linktype, i_valid)),
                         'ChangeType': list(compress(changetype, i_valid)),
                         'Link': [str(arr[0]) for arr in linkchange]})
+                        # 'ErrorChange': errorchange})
+    if len(df) > 0:
+        df['ErrorChange'] = np.array([errorchange[i] for i in range(len(errorchange)) if i_valid[i]])
 
     linklen = np.array([len(l) for l in df['Link'].values])
     # overlaplen = (1 + (linklen/2)).astype(int)
@@ -676,13 +681,16 @@ for k in range(len(x_all_list_null)):
     linkchange = []
     linktype = []
     changetype = []
+    errorchange = []
     overlapmets = []
     test = []
     x_list = x_all_list_null[k]
-    elist = log_bias_list[k]
+    elist = log_bias_list_null[k]
+    error_diff = elist - elist[0]
     for i in range(1, len(x_list)):
         x_diff = x_list[i] - x_list[i-1]
         i_change = np.where(x_diff != 0)[0]
+        errorchange.append(error_diff[i])
 
         # for i_change in i_change_all:
         changetype.append(np.where(x_diff[i_change] > 0, 'Added', 'Removed')[0])
@@ -724,6 +732,9 @@ for k in range(len(x_all_list_null)):
     df = pd.DataFrame({'LinkType': list(compress(linktype, i_valid)),
                         'ChangeType': list(compress(changetype, i_valid)),
                         'Link': [str(arr[0]) for arr in linkchange]})
+                        # 'ErrorChange': errorchange})
+    if len(df) > 0:
+        df['ErrorChange'] = np.array([errorchange[i] for i in range(len(errorchange)) if i_valid[i]])
 
     linklen = np.array([len(l) for l in df['Link'].values])
     # overlaplen = (1 + (linklen/2)).astype(int)
@@ -731,7 +742,7 @@ for k in range(len(x_all_list_null)):
     df.loc[:, 'OverlapLen'] = (1 + (linklen/2)).astype(int) - 1
     # df.loc[:, 'RMSEType'] = np.where(df['RMSEdiff'].values < 0, True, False)
     df.loc[:, 'SimTime'] = np.arange(len(df))
-    pooled_df_null = pd.concat([pooled_df, df])
+    pooled_df_null = pd.concat([pooled_df_null, df])
 
 pooled_df_null.loc[:, 'Model'] = 'Null'
 pooled_df.loc[:, 'Model'] = 'Optimised'
@@ -740,11 +751,11 @@ pooled_df.loc[:, 'Model'] = 'Optimised'
 figsave_flag=1
 fig_path = '../figures/'+str(n_ct)+'-celltypes/optim-net/'+cl
 
-pooled_df.loc[:, 'OverlapStatus'] = np.where(pooled_df.loc[:, 'OverlapLen'] > 1, 'Overlap',
-                                             np.where((pooled_df.loc[:, 'OverlapLen'] == 1)*(pooled_df.loc[:, 'LinkType'] == 'Consumption'), 'Consumption', 'Production'))
+pooled_df.loc[:, 'OverlapStatus'] = np.where(pooled_df.loc[:, 'OverlapLen'] > 0, 'Overlap',
+                                             np.where((pooled_df.loc[:, 'OverlapLen'] == 0)*(pooled_df.loc[:, 'LinkType'] == 'Consumption'), 'Consumption', 'Production'))
 
-pooled_df_null.loc[:, 'OverlapStatus'] = np.where(pooled_df_null.loc[:, 'OverlapLen'] > 1, 'Overlap',
-                                             np.where((pooled_df_null.loc[:, 'OverlapLen'] == 1)*(pooled_df_null.loc[:, 'LinkType'] == 'Consumption'), 'Consumption', 'Production'))
+pooled_df_null.loc[:, 'OverlapStatus'] = np.where(pooled_df_null.loc[:, 'OverlapLen'] > 0, 'Overlap',
+                                             np.where((pooled_df_null.loc[:, 'OverlapLen'] == 0)*(pooled_df_null.loc[:, 'LinkType'] == 'Consumption'), 'Consumption', 'Production'))
 
 pooled_df[pooled_df.columns[-1]] = pd.Categorical(pooled_df[pooled_df.columns[-1]],
                                     ['Overlap', 'Consumption', 'Production'])
@@ -771,7 +782,7 @@ h = sns.kdeplot(data=null_rmse_df, x='DeltaRMSE',
                  hue='Model', palette={'Null': 'tab:grey', 'Optimised': 'tab:red'},
                  alpha=0.75, fill=True, multiple='layer', common_norm=False)
 
-h.set_xlabel(r'$\Delta$ RMSE = Initial $-$ Final')
+h.set_xlabel(r'$\Delta$ Prediction error = Initial $-$ Final')
 sns.despine(offset=4, trim=False)
 h.figure.tight_layout()
 if figsave_flag:
@@ -795,7 +806,34 @@ if figsave_flag:
 else:
     plt.show()
 
+error_change_grouped = pd.concat([pooled_df, pooled_df_null]).groupby(['Model', 'OverlapLen'])['ErrorChange'].mean().reset_index()
 
+plt.figure(figsize=(5.5, 4.5))
+sns.set_style('ticks')
+combined = pd.concat([pooled_df, pooled_df_null])
+# Ensure consistent category ordering and readable labels
+combined['Model'] = combined['Model'].astype(str)
+combined['OverlapLen'] = combined['OverlapLen'].astype(int)
+order = sorted(combined['Model'].unique())
+hue_order = sorted(combined['OverlapLen'].unique())
 
+q = sns.boxplot(data=combined, x='Model', y='ErrorChange',
+                hue='OverlapLen', hue_order=hue_order, order=order,
+                palette={0: 'tab:grey', 1: 'tab:red'},
+                width=0.6, fliersize=3, linewidth=1.2,
+                showcaps=True, boxprops={'edgecolor': 'k', 'zorder':2},
+                medianprops={'color':'black'}, whiskerprops={'linewidth':1.2},
+                capprops={'linewidth':0.8})
 
+# Aesthetics matching other figures
+q.set_yscale('symlog', linthresh=0.1)
+q.set_xlabel('Model')
+q.set_ylabel('Error change')
+q.legend(title='# overlapping links', loc='upper right', frameon=False)
+q.figure.tight_layout()
+if figsave_flag:
+    q.figure.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-null-vs-optimised-error-change-boxplot.png', dpi=300)
+    plt.close(q.figure)
+else:
+    plt.show()
 # %%
