@@ -1844,6 +1844,32 @@
 ################################################################
 ############### cancer-all-network-models.py ###################
 ################################################################
+# def net_from_x(x, MAX_ID_metabolites, MAX_ID_celltypes):
+
+#     max_links = MAX_ID_celltypes * MAX_ID_metabolites # maximal number of links = number of celltypes * number of metabolites
+
+#     ######## Convert x to net structure (convert the adjacency matrix into the edge list):
+#     ### consumption links:
+#     x_consumption = x[:max_links]
+#     x_production = x[max_links:]
+
+#     a = np.repeat(np.arange(MAX_ID_metabolites)[np.newaxis, :], MAX_ID_celltypes, axis=0).ravel() #net_ori.iloc[:max_links, 0].values
+#     b = np.repeat(np.arange(MAX_ID_celltypes), MAX_ID_metabolites) #net_ori.iloc[:max_links, 1].values
+#     c = np.where(x_consumption, 2, 0)
+#     net_added_consumption = pd.DataFrame({'metabolites': a,
+#                                           'celltypes': b,
+#                                           'edgeType': c})
+    
+#     # a = net_ori.iloc[max_links:, 0].values
+#     # b = net_ori.iloc[max_links:, 1].values
+#     c = np.where(x_production, 3, 0)
+#     net_added_production = pd.DataFrame({'metabolites': a,
+#                                           'celltypes': b,
+#                                           'edgeType': c})
+
+#     net = pd.concat([net_added_consumption, net_added_production])
+
+#     return net
 # # %%
 # # g, ax = plt.subplots(figsize=(12, 7))
 # with sns.axes_style('darkgrid'):

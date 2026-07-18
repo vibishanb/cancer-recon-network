@@ -12,22 +12,30 @@ Data:   30/10/2025, 14:07:09
 import pandas as pd
 import numpy as np
 import seaborn as sns
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-from scipy.stats import pearsonr, spearmanr
+from scipy.stats import gmean
 
-from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from matplotlib.ticker import MaxNLocator
 from matplotlib.collections import LineCollection
 
-import pickle
 import os
+import warnings
 from tqdm import tqdm
 from itertools import compress
 
 SMALL_SIZE = 15
 MEDIUM_SIZE = 17
 BIGGER_SIZE = 19
+
+# Okabe-Ito palette extended for additional categories
+OKABE_ITO_PALETTE = {
+    0: "#E69F00",  # orange
+    1: "#56B4E9",  # sky blue
+    2: "#009E73",  # bluish green
+    3: "#F8766D",  # red
+    4: "#D55E00",  # vermillion
+    5: "#CC79A7",  # reddish purple / pink
+}
 
 plt.rc('font', size=SMALL_SIZE, family='sans-serif', serif='Arial')          # controls default text sizes
 plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
@@ -200,8 +208,8 @@ figsave_flag = 1
 #### Data import
 # cl='A549-ATCC'
 # n_ct = 2
-for n_ct in tqdm(np.arange(2, 7), desc='N_CT: '):
-    for cl in tqdm(ec_metabolome.columns.to_numpy()[:-2], desc='Cell line: '):
+for n_ct in tqdm(np.arange(5, 6), desc='N_CT: '):
+    for cl in tqdm(ec_metabolome.columns.to_numpy()[0:1], desc='Cell line: '):
 
         pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
 
@@ -415,12 +423,12 @@ else:
     plt.show()
 
 # %%
-figsave_flag = 1
 ########## Figure 3
+figsave_flag = 0
 rmse_arr_heatmap = [[]]
 num_final_heatmap = [[]]
 
-for cl in ec_metabolome.columns.to_numpy()[:-2]:
+for cl in ec_metabolome.columns.to_numpy()[0:1]:
     rmse = []
     num_final = []
     ec_real = ec_metabolome.loc[:, cl].values
@@ -505,8 +513,113 @@ else:
 
 
 # %%
-figsave_flag = 1
-##### Figure 4
+figsave_flag = 0
+##### Figure 4 - overlap plots for optimised networks
+# Load overlap analysis output saved by cancer-all-network-models.py and plot overlap summaries
+# The raw-output path mirrors the no-learn-balanced-net celltype structure used in cancer-all-network-models.py.
+overlap_figsave_flag = figsave_flag
+overlap_pickle_path = '../raw-output/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
+overlap_plot_data = pd.read_pickle(overlap_pickle_path + '/overlap-plot-data.pickle')
+ov_error_df = overlap_plot_data['ov_error_df']
+ov_links_df = overlap_plot_data['ov_links_df']
+
+overlap_fig_path = '../figures/'+str(n_ct)+'-celltypes/no-learn-balanced-net/'+cl
+try:
+    os.makedirs(overlap_fig_path)
+except:
+    pass
+
+with sns.axes_style('ticks'):
+    con_ov_df = ov_error_df[(ov_error_df['Fraction'] == 1) & (ov_error_df['Ltype'] == 'Consumption')]
+    x = con_ov_df['DelRMSE'].dropna().to_numpy()
+
+    threshold = 1e-4
+    bins_per_decade = 5
+    dz = 1 / bins_per_decade
+
+    z = np.zeros_like(x, dtype=float)
+    neg_mask = x <= -threshold
+    pos_mask = x >= threshold
+
+    z[neg_mask] = -(
+        dz / 2
+        + np.log10(np.abs(x[neg_mask]) / threshold)
+    )
+    z[pos_mask] = (
+        dz / 2
+        + np.log10(x[pos_mask] / threshold)
+    )
+
+    zmin = np.min(z) if len(z) > 0 else 0
+    zmax = np.max(z) if len(z) > 0 else 0
+    left_edge = -dz / 2 - np.ceil((-dz / 2 - zmin) / dz) * dz
+    right_edge = dz / 2 + np.ceil((zmax - dz / 2) / dz) * dz
+    bins = np.arange(left_edge, right_edge + dz / 2, dz)
+    weights = np.ones_like(z) / len(z) if len(z) > 0 else np.ones_like(z)
+
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.hist(z, bins=bins, weights=weights, edgecolor='black', linewidth=0.4, color='tab:green')
+    ax.set_yscale('log')
+    ax.set_xlabel(r'Change in prediction error')
+    ax.set_ylabel('Frequency')
+
+    neg_max_decade = int(np.floor(np.log10(np.max(np.abs(x[neg_mask])) / threshold))) if np.any(neg_mask) else 0
+    pos_max_decade = int(np.floor(np.log10(np.max(x[pos_mask]) / threshold))) if np.any(pos_mask) else 0
+    neg_k = np.arange(0, neg_max_decade + 1)
+    pos_k = np.arange(0, pos_max_decade + 1)
+    neg_tick_positions = -(dz / 2 + neg_k)
+    pos_tick_positions = dz / 2 + pos_k
+    neg_tick_labels = ['' if k == 0 else rf'$-{threshold * 10**k:.0e}$' for k in neg_k]
+    pos_tick_labels = ['' if k == 0 else rf'${threshold * 10**k:.0e}$' for k in pos_k]
+    ax.set_xticks(np.concatenate([neg_tick_positions[::-1], [0], pos_tick_positions]))
+    ax.set_xticklabels(neg_tick_labels[::-1] + ['0'] + pos_tick_labels, rotation=60, ha='right')
+    sns.despine(offset=3, trim=False)
+    ax.set_title('Improvements from consumption overlap', fontsize=BIGGER_SIZE+2)
+    gmean_x = -gmean(-x[x < 0]) if np.any(x < 0) else 0
+    sd = np.exp(-np.log(-x[x < 0]).std()) if np.any(x < 0) else 0
+    if np.any(x < 0):
+        ax.axvline(x=gmean_x, color='k', linestyle='--', linewidth=2.5, label='Mean')
+        x_min, x_max = ax.get_xlim()
+        ax.axvspan(xmin=x_min, xmax=gmean_x - sd, color='tab:green', alpha=0.3, label='Accept')
+        ax.axvspan(xmin=gmean_x - sd, xmax=x_max, color='orange', alpha=0.3, label='Reject')
+        y_top = ax.get_ylim()[1] * 0.86
+        ax.text((x_min + gmean_x - sd) / 2, y_top, 'Accept', ha='center', va='center', color='tab:green', fontsize=14, bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+        ax.text((gmean_x - sd + x_max) / 2, y_top, 'Reject', ha='center', va='center', color='orange', fontsize=14, bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+
+    if overlap_figsave_flag:
+        fig.savefig(overlap_fig_path + '/delta-rmse-consumption-hist-plot.png', dpi=300, bbox_inches='tight')
+        plt.close(fig)
+    else:
+        plt.show()
+
+h = sns.displot(data=ov_links_df, x='MetRanks', kind='hist',
+                hue='LinkType', palette={'Consumption': 'tab:green', 'Production': 'tab:blue'},
+                row='NetType', multiple='stack', stat='probability', common_norm=False,
+                discrete=True, height=2, aspect=4)
+h.tick_params(axis='x', labelrotation=60)
+h.set_xlabels('Abundance rank')
+if overlap_figsave_flag:
+    h.savefig(overlap_fig_path + '/overlaps-met-abundance-rank-distribution.png', dpi=300)
+    plt.close(h.figure)
+else:
+    plt.show()
+
+s = sns.displot(data=ov_links_df, x='Link', kind='hist',
+                hue='LinkType', palette={'Consumption': 'tab:green', 'Production': 'tab:blue'},
+                row='NetType', multiple='stack', stat='probability', common_norm=False,
+                discrete=True, shrink=0.9, height=2, aspect=3)
+s.tick_params(axis='x', labelrotation=60)
+s.set_titles('')
+s.set_xlabels('Overlapping link')
+if overlap_figsave_flag:
+    s.savefig(overlap_fig_path + '/overlapping-links-distribution.png', bbox_inches='tight', dpi=300)
+    plt.close(s.figure)
+else:
+    plt.show()
+
+# %%
+figsave_flag = 0
+###### Figure 4D-network optimisation learning progress and overlap analysis
 for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: '):#np.arange(0, 1):
         for n_ct in np.arange(5, 6):
             reward = 0.2
@@ -572,7 +685,7 @@ for k in range(1):#tqdm(range(len(sublinear_cell_lines[0])), desc='Cell line: ')
                                        'RMSE': np.concatenate([final_pred_error, final_pred_error])})
             with sns.axes_style('ticks'):
                 f = sns.catplot(data=overlap_df, x='Overlap',
-                                 col='LinkType', hue='LinkType', palette={'Consumption': 'tab:green', 'Production': 'tab:blue'}, kind='count', stat='percent',
+                                 col='LinkType', hue='LinkType', palette={'Consumption': '#0173B2', 'Production': '#DE8F05'}, kind='count', stat='percent',
                                  alpha=0.9, fill=True)
                 f.set_xlabels('# overlapping metabolites')
                 f.set_ylabels('Percentage')
@@ -603,13 +716,14 @@ met_ID = diet.index.to_numpy()
 linktype_error_df = pd.DataFrame()
 n_reps = len(log_bias_list)
 
-init_error = np.array([arr[0] for arr in log_bias_list])
-final_error = np.array([arr[-1] for arr in log_bias_list])
-error_change = init_error - final_error
-i_best = np.where(error_change == error_change.max())[0] # np.where(final_error == final_error.min())[0]
+# init_error = np.array([arr[0] for arr in log_bias_list])
+# final_error = np.array([arr[-1] for arr in log_bias_list])
+# error_change = init_error - final_error
+# i_best = np.where(error_change == error_change.max())[0] # np.where(final_error == final_error.min())[0]
 
 pooled_df = pd.DataFrame()
-for k in range(len(x_ori_list)):
+# replicate = int(0)
+for k in range(len(x_all_list)):
     linkchange = []
     linktype = []
     changetype = []
@@ -618,12 +732,13 @@ for k in range(len(x_ori_list)):
     test = []
     x_list = x_all_list[k]
     elist = log_bias_list[k]
-    error_diff = elist - elist[0]
+    # error_diff = error_plot_list[k]
+    error_diff = np.concatenate([[0], np.diff(elist)])
     for i in range(1, len(x_list)):
         x_diff = x_list[i] - x_list[i-1]
         i_change = np.where(x_diff != 0)[0]
         errorchange.append(error_diff[i])
-        
+
         # for i_change in i_change_all:
         changetype.append(np.where(x_diff[i_change] > 0, 'Added', 'Removed')[0])
 
@@ -666,6 +781,8 @@ for k in range(len(x_ori_list)):
                         'Link': [str(arr[0]) for arr in linkchange]})
                         # 'ErrorChange': errorchange})
     if len(df) > 0:
+        # replicate += int(1)
+        df['Replicate'] = np.repeat(k+1, len(linkchange)).astype(int)
         df['ErrorChange'] = np.array([errorchange[i] for i in range(len(errorchange)) if i_valid[i]])
 
     linklen = np.array([len(l) for l in df['Link'].values])
@@ -677,6 +794,7 @@ for k in range(len(x_ori_list)):
     pooled_df = pd.concat([pooled_df, df])
 
 pooled_df_null = pd.DataFrame()
+replicate = 0
 for k in range(len(x_all_list_null)):
     linkchange = []
     linktype = []
@@ -686,12 +804,12 @@ for k in range(len(x_all_list_null)):
     test = []
     x_list = x_all_list_null[k]
     elist = log_bias_list_null[k]
-    error_diff = elist - elist[0]
+    # error_diff = error_plot_list[k]
+    error_diff = np.concatenate([[0], np.diff(elist)])
     for i in range(1, len(x_list)):
         x_diff = x_list[i] - x_list[i-1]
         i_change = np.where(x_diff != 0)[0]
         errorchange.append(error_diff[i])
-
         # for i_change in i_change_all:
         changetype.append(np.where(x_diff[i_change] > 0, 'Added', 'Removed')[0])
 
@@ -734,6 +852,8 @@ for k in range(len(x_all_list_null)):
                         'Link': [str(arr[0]) for arr in linkchange]})
                         # 'ErrorChange': errorchange})
     if len(df) > 0:
+        # replicate += 1
+        df['Replicate'] = np.repeat(k+1, len(linkchange)).astype(int)
         df['ErrorChange'] = np.array([errorchange[i] for i in range(len(errorchange)) if i_valid[i]])
 
     linklen = np.array([len(l) for l in df['Link'].values])
@@ -748,7 +868,8 @@ pooled_df_null.loc[:, 'Model'] = 'Null'
 pooled_df.loc[:, 'Model'] = 'Optimised'
 
 # %%
-figsave_flag=1
+######## Figure 4E and F - null vs optimised overlap analysis summary plots
+figsave_flag=0
 fig_path = '../figures/'+str(n_ct)+'-celltypes/optim-net/'+cl
 
 pooled_df.loc[:, 'OverlapStatus'] = np.where(pooled_df.loc[:, 'OverlapLen'] > 0, 'Overlap',
@@ -776,13 +897,13 @@ else:
 
 error_change_null = np.array([ierr - nerr for nerr, ierr in zip(log_bias_list_null, init_error)]).flatten()
 null_rmse_df = pd.DataFrame({'Model': np.concatenate([['Null']*len(error_change_null), ['Optimised']*len(error_change)]),
-                             'DeltaRMSE': np.concatenate([error_change_null, error_change])})
+                             'DeltaRMSE': -np.concatenate([error_change_null, error_change])})
 
 h = sns.kdeplot(data=null_rmse_df, x='DeltaRMSE',
-                 hue='Model', palette={'Null': 'tab:grey', 'Optimised': 'tab:red'},
+                 hue='Model', palette={'Null': '#0173B2', 'Optimised': '#DE8F05'},
                  alpha=0.75, fill=True, multiple='layer', common_norm=False)
 
-h.set_xlabel(r'$\Delta$ Prediction error = Initial $-$ Final')
+h.set_xlabel(r'$-\Delta$ Prediction error = Initial $-$ Final')
 sns.despine(offset=4, trim=False)
 h.figure.tight_layout()
 if figsave_flag:
@@ -792,9 +913,9 @@ else:
     plt.show()
 
 p = sns.histplot(data=pd.concat([pooled_df_null, pooled_df]), x='OverlapLen',
-                 hue='Model', palette={'Null': 'tab:grey', 'Optimised': 'tab:red'},
+                 hue='Model', palette={'Null': '#0173B2', 'Optimised': '#DE8F05'},
                  alpha=0.75, fill=True, discrete=True, shrink=0.8,
-                 multiple='layer', stat='proportion',
+                 multiple='stack', stat='proportion',
                  common_norm=False)
 p.set_xlabel(r'# overlapping links')
 p.xaxis.set_major_locator(MaxNLocator(integer=True))
@@ -808,7 +929,7 @@ else:
 
 error_change_grouped = pd.concat([pooled_df, pooled_df_null]).groupby(['Model', 'OverlapLen'])['ErrorChange'].mean().reset_index()
 
-plt.figure(figsize=(5.5, 4.5))
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 sns.set_style('ticks')
 combined = pd.concat([pooled_df, pooled_df_null])
 # Ensure consistent category ordering and readable labels
@@ -817,23 +938,157 @@ combined['OverlapLen'] = combined['OverlapLen'].astype(int)
 order = sorted(combined['Model'].unique())
 hue_order = sorted(combined['OverlapLen'].unique())
 
+# Plot p (histplot) on left subplot
+p = sns.histplot(data=pd.concat([pooled_df_null, pooled_df]), x='OverlapLen',
+                 hue='Model', palette={'Null': '#0173B2', 'Optimised': '#DE8F05'},
+                 alpha=0.75, fill=True, discrete=True, shrink=0.8,
+                 multiple='stack', stat='proportion',
+                 common_norm=False, ax=axes[0])
+p.set_xlabel(r'# overlapping links')
+p.xaxis.set_major_locator(MaxNLocator(integer=True))
+axes[0].text(-0.15, 1.05, 'E', transform=axes[0].transAxes, fontsize=20, fontweight='bold')
+
+# Plot q (boxplot with jittered points) on right subplot
+okabe_ito_palette = {0: '#0173B2', 1: '#DE8F05', 2: '#029E73', 3: '#CC78BC', 4: '#CA9161'}  # Okabe-Ito palette
 q = sns.boxplot(data=combined, x='Model', y='ErrorChange',
                 hue='OverlapLen', hue_order=hue_order, order=order,
-                palette={0: 'tab:grey', 1: 'tab:red'},
-                width=0.6, fliersize=3, linewidth=1.2,
-                showcaps=True, boxprops={'edgecolor': 'k', 'zorder':2},
-                medianprops={'color':'black'}, whiskerprops={'linewidth':1.2},
-                capprops={'linewidth':0.8})
+                palette=okabe_ito_palette,
+                ax=axes[1])
+sns.stripplot(data=combined, x='Model', y='ErrorChange',
+              hue='OverlapLen', hue_order=hue_order, order=order,
+              palette=okabe_ito_palette,
+              dodge=True, size=6, alpha=0.6, edgecolor='black', linewidth=0.5,
+              ax=axes[1], legend=False)
 
 # Aesthetics matching other figures
-q.set_yscale('symlog', linthresh=0.1)
-q.set_xlabel('Model')
-q.set_ylabel('Error change')
-q.legend(title='# overlapping links', loc='upper right', frameon=False)
-q.figure.tight_layout()
+axes[1].set_yscale('symlog', linthresh=0.1)
+axes[1].set_xlabel('Model type')
+axes[1].set_ylabel('Change in prediction error')
+axes[1].legend(title='# overlapping links', loc='upper right', frameon=False)
+axes[1].text(-0.15, 1.05, 'F', transform=axes[1].transAxes, fontsize=20, fontweight='bold')
+
+fig.tight_layout()
 if figsave_flag:
-    q.figure.savefig(fig_path+'/reward-'+str(reward)+'-penalty-'+str(penalty)+'-null-vs-optimised-error-change-boxplot.png', dpi=300)
-    plt.close(q.figure)
+    fig.savefig('../writing/fig4-e-f.pdf', bbox_inches='tight')
+    plt.close(fig)
 else:
     plt.show()
+
+
+# %%
+######## Supplementary Figure 4 - RMSE change vs link change type and link type
+# g, ax = plt.subplots(figsize=(12, 7))
+figsave_flag = 0
+pooled_df['Replicate'] = pooled_df['Replicate'].astype(int)
+with sns.axes_style('ticks'):
+    overlap_palette = {0: '#0173B2', 1: '#DE8F05', 2: '#029E73', 3: '#CC78BC', 4: '#CA9161'}  # Okabe-Ito palette
+    plot_df = pooled_df.sort_values(['Replicate', 'SimTime']).copy()
+    replicate_order = sorted(plot_df['Replicate'].unique())
+    bar_width = 1.55
+    step_spacing = 1.70
+    replicate_gap = 1.8
+    offset = 0
+    replicate_ranges = []
+    replicate_dfs = []
+
+    for replicate in replicate_order:
+        rep_df = plot_df[plot_df['Replicate'] == replicate].sort_values('SimTime').copy()
+        rep_df['PlotStep'] = offset + np.arange(len(rep_df)) * step_spacing
+        start = rep_df['PlotStep'].min() - bar_width / 2
+        end = rep_df['PlotStep'].max() + bar_width / 2
+        replicate_ranges.append((replicate, start, end, (start + end) / 2))
+        replicate_dfs.append(rep_df)
+        offset = rep_df['PlotStep'].max() + step_spacing + replicate_gap
+
+    plot_df = pd.concat(replicate_dfs, ignore_index=True)
+
+    fig, ax = plt.subplots(figsize=(14, 4.5))
+    for overlap_len in [0, 1, 2]:
+        sub_df = plot_df[plot_df['OverlapLen'] == overlap_len]
+        ax.bar(sub_df['PlotStep'], sub_df['ErrorChange'],
+               color=overlap_palette[overlap_len], width=bar_width, label=overlap_len)
+
+    ax.margins(x=0.01)
+    ax.set_xticks([])
+    ax.set_xlabel('Replicate')
+    ax.set_ylabel('Change in prediction error')
+    ax.legend(title='# overlapping links', frameon=False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    for replicate, start, end, center in replicate_ranges:
+        ax.hlines(y=1.02, xmin=start, xmax=end, color='black', linewidth=1.2,
+                  transform=ax.get_xaxis_transform(), clip_on=False)
+        ax.text(center, 1.05, str(replicate), transform=ax.get_xaxis_transform(),
+                ha='center', va='bottom', fontsize=ax.xaxis.label.get_fontsize())
+
+    fig.tight_layout()
+
+if figsave_flag:
+    fig.savefig(fig_path + '/reward-{reward}-penalty-{penalty}-replicates-error-change-barplot.png', dpi=300, 
+    bbox_inches='tight')
+    plt.close(fig)
+else:
+    plt.show()
+
+pooled_df_null['Replicate'] = pooled_df_null['Replicate'].astype(int)
+with sns.axes_style('ticks'):
+    overlap_palette = {0: '#0173B2', 1: '#DE8F05', 2: '#029E73', 3: '#CC78BC', 4: '#CA9161'}  # Okabe-Ito palette
+    plot_df = pooled_df_null.sort_values(['Replicate', 'SimTime']).copy()
+    replicate_order = sorted(plot_df['Replicate'].unique())
+    bar_width = 1.55
+    step_spacing = 1.70
+    replicate_gap = 1.8
+    offset = 0
+    replicate_ranges = []
+    replicate_dfs = []
+
+    for replicate in replicate_order:
+        rep_df = plot_df[plot_df['Replicate'] == replicate].sort_values('SimTime').copy()
+        rep_df['PlotStep'] = offset + np.arange(len(rep_df)) * step_spacing
+        start = rep_df['PlotStep'].min() - bar_width / 2
+        end = rep_df['PlotStep'].max() + bar_width / 2
+        replicate_ranges.append((replicate, start, end, (start + end) / 2))
+        replicate_dfs.append(rep_df)
+        offset = rep_df['PlotStep'].max() + step_spacing + replicate_gap
+
+    plot_df = pd.concat(replicate_dfs, ignore_index=True)
+
+    fig, ax = plt.subplots(figsize=(14, 4.5))
+    for overlap_len in np.unique(plot_df['OverlapLen'].values):
+        sub_df = plot_df[plot_df['OverlapLen'] == overlap_len]
+        ax.bar(sub_df['PlotStep'], sub_df['ErrorChange'],
+               color=overlap_palette[overlap_len], width=bar_width, label=overlap_len)
+
+    ax.margins(x=0.01)
+    ax.set_xticks([])
+    ax.set_xlabel('Replicate')
+    ax.set_ylabel('Change in prediction error')
+    ax.legend(title='# overlapping links', frameon=False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    for replicate, start, end, center in replicate_ranges:
+        ax.hlines(y=1.02, xmin=start, xmax=end, color='black', linewidth=1.2,
+                  transform=ax.get_xaxis_transform(), clip_on=False)
+        ax.text(center, 1.05, str(replicate), transform=ax.get_xaxis_transform(),
+                ha='center', va='bottom', fontsize=ax.xaxis.label.get_fontsize())
+
+    fig.tight_layout()
+
+if figsave_flag:
+    fig.savefig(fig_path + '/reward-{reward}-penalty-{penalty}-replicates-error-change-barplot.png', dpi=300, 
+    bbox_inches='tight')
+    plt.close(fig)
+else:
+    plt.show()
+
+    # sns.despine(offset=3, trim=True)
+# %%
+count_df = pd.concat([pooled_df_null, pooled_df]).groupby(['Model', 'OverlapLen'])['Link'].count().reset_index().pivot(index='Model', columns='OverlapLen', values='Link').fillna(0).astype(int)
+count_df
+count_df.sum(axis=1).values
+count_df.T/count_df.sum(axis=1).values
 # %%

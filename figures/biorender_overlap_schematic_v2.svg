@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1760" viewBox="0 0 1700 1760">
+<rect width="100%" height="100%" fill="white"/>
+<defs>
+<marker id="mgray" markerUnits="userSpaceOnUse" markerWidth="15" markerHeight="15" refX="13" refY="7.5" orient="auto"><polygon points="0,0 14,7.5 0,15" fill="#9AA0A6"/></marker>
+<marker id="mblue" markerUnits="userSpaceOnUse" markerWidth="20" markerHeight="20" refX="17" refY="10" orient="auto"><polygon points="0,0 19,10 0,20" fill="#2F80ED"/></marker>
+<marker id="mgreen" markerUnits="userSpaceOnUse" markerWidth="20" markerHeight="20" refX="17" refY="10" orient="auto"><polygon points="0,0 19,10 0,20" fill="#4F9D1D"/></marker>
+</defs>
+<line x1="280" y1="620" x2="1420" y2="620" stroke="#E3E3E3" stroke-width="2" stroke-linecap="round"/>
+<line x1="280" y1="1170" x2="1420" y2="1170" stroke="#E3E3E3" stroke-width="2" stroke-linecap="round"/>
+<text x="20" y="70" text-anchor="start" dominant-baseline="middle" font-size="42" font-weight="bold" fill="#3A3A3A" font-family="Arial,Helvetica,sans-serif">i.</text>
+<text x="20" y="620" text-anchor="start" dominant-baseline="middle" font-size="42" font-weight="bold" fill="#3A3A3A" font-family="Arial,Helvetica,sans-serif">ii.</text>
+<text x="20" y="1170" text-anchor="start" dominant-baseline="middle" font-size="42" font-weight="bold" fill="#3A3A3A" font-family="Arial,Helvetica,sans-serif">iii.</text>
+<path d="M680.0,138.0 C680.0,189.3 770.0,200.7 770.0,252.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M800.0,138.0 C800.0,189.3 770.0,200.7 770.0,252.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M920.0,138.0 C920.0,189.3 910.0,200.7 910.0,252.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1040.0,138.0 C1040.0,189.3 1050.0,200.7 1050.0,252.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1160.0,138.0 C1160.0,189.3 1050.0,200.7 1050.0,252.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1280.0,138.0 C1280.0,189.3 1190.0,200.7 1190.0,252.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M910.0,328.0 C910.0,379.3 680.0,390.7 680.0,442.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M770.0,328.0 C770.0,379.3 800.0,390.7 800.0,442.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1050.0,328.0 C1050.0,379.3 920.0,390.7 920.0,442.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1050.0,328.0 C1050.0,379.3 1040.0,390.7 1040.0,442.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1190.0,328.0 C1190.0,379.3 1160.0,390.7 1160.0,442.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1190.0,328.0 C1190.0,379.3 1280.0,390.7 1280.0,442.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<polygon points="680.0,104.0 693.9,128.0 666.1,128.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<polygon points="680.0,444.0 693.9,468.0 666.1,468.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<rect x="786.9" y="106.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4"/>
+<rect x="786.9" y="446.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="920.0,104.0 933.6,120.0 920.0,136.0 906.4,120.0" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="920.0,444.0 933.6,460.0 920.0,476.0 906.4,460.0" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="1053.9,128.0 1040.0,136.0 1026.1,128.0 1026.1,112.0 1040.0,104.0 1053.9,112.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="1053.9,468.0 1040.0,476.0 1026.1,468.0 1026.1,452.0 1040.0,444.0 1053.9,452.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="1160.0,104.0 1173.9,128.0 1146.1,128.0" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<polygon points="1160.0,444.0 1173.9,468.0 1146.1,468.0" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1266.9" y="106.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<rect x="1266.9" y="446.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<circle cx="770" cy="290" r="34" fill="#E4A400" stroke="#EAF2F8" stroke-width="3"/><circle cx="763.2" cy="284.9" r="14" fill="#8A5A00"/><circle cx="760.2" cy="281.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="777.5" cy="278.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<circle cx="910" cy="290" r="34" fill="#5AAEE6" stroke="#EAF2F8" stroke-width="3"/><circle cx="903.2" cy="284.9" r="14" fill="#2B6E9A"/><circle cx="900.2" cy="281.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="917.5" cy="278.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<circle cx="1050" cy="290" r="34" fill="#16A085" stroke="#EAF2F8" stroke-width="3"/><circle cx="1043.2" cy="284.9" r="14" fill="#0B6150"/><circle cx="1040.2" cy="281.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="1057.5" cy="278.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<circle cx="1190" cy="290" r="34" fill="#D96B00" stroke="#EAF2F8" stroke-width="3"/><circle cx="1183.2" cy="284.9" r="14" fill="#8A3B00"/><circle cx="1180.2" cy="281.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="1197.5" cy="278.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<text x="55" y="120" text-anchor="start" dominant-baseline="middle" font-size="44" font-weight="bold" fill="#2B2B2B" font-family="Arial,Helvetica,sans-serif" >Fresh medium</text>
+<text x="210" y="205.0" text-anchor="start" dominant-baseline="middle" font-size="36" font-weight="bold" fill="#5F6368" font-family="Arial,Helvetica,sans-serif" >consumption links</text>
+<text x="55" y="290" text-anchor="start" dominant-baseline="middle" font-size="44" font-weight="bold" fill="#2B2B2B" font-family="Arial,Helvetica,sans-serif" >Cell phenotype</text>
+<text x="210" y="375.0" text-anchor="start" dominant-baseline="middle" font-size="36" font-weight="bold" fill="#5F6368" font-family="Arial,Helvetica,sans-serif" >production links</text>
+<text x="55" y="460" text-anchor="start" dominant-baseline="middle" font-size="44" font-weight="bold" fill="#2B2B2B" font-family="Arial,Helvetica,sans-serif" >Spent medium</text>
+<rect x="785.0" y="539.0" width="390" height="72" rx="34" fill="#F4F4F4" stroke="#BEBEBE" stroke-width="3"/>
+<text x="980" y="577" text-anchor="middle" dominant-baseline="middle" font-size="32" font-weight="normal" fill="#444" font-family="Arial,Helvetica,sans-serif" >No overlap</text>
+<path d="M680.0,688.0 C680.0,739.3 770.0,750.7 770.0,802.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M800.0,688.0 C800.0,739.3 770.0,750.7 770.0,802.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M920.0,688.0 C920.0,739.3 770.0,750.7 770.0,802.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M920.0,688.0 C920.0,739.3 910.0,750.7 910.0,802.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1040.0,688.0 C1040.0,739.3 1050.0,750.7 1050.0,802.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1160.0,688.0 C1160.0,739.3 1050.0,750.7 1050.0,802.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1280.0,688.0 C1280.0,739.3 1190.0,750.7 1190.0,802.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M920.0,688.0 C920.0,739.3 770.0,750.7 770.0,802.0" fill="none" stroke="#2F80ED" stroke-width="10" stroke-linecap="round" marker-end="url(#mblue)"/>
+<path d="M920.0,688.0 C920.0,739.3 910.0,750.7 910.0,802.0" fill="none" stroke="#2F80ED" stroke-width="10" stroke-linecap="round" marker-end="url(#mblue)"/>
+<path d="M910.0,878.0 C910.0,929.3 680.0,940.7 680.0,992.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M770.0,878.0 C770.0,929.3 800.0,940.7 800.0,992.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1050.0,878.0 C1050.0,929.3 920.0,940.7 920.0,992.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1050.0,878.0 C1050.0,929.3 1040.0,940.7 1040.0,992.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1190.0,878.0 C1190.0,929.3 1160.0,940.7 1160.0,992.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1190.0,878.0 C1190.0,929.3 1280.0,940.7 1280.0,992.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<polygon points="680.0,654.0 693.9,678.0 666.1,678.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<polygon points="680.0,994.0 693.9,1018.0 666.1,1018.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<rect x="786.9" y="656.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4"/>
+<rect x="786.9" y="996.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="920.0,654.0 933.6,670.0 920.0,686.0 906.4,670.0" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="920.0,994.0 933.6,1010.0 920.0,1026.0 906.4,1010.0" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="1053.9,678.0 1040.0,686.0 1026.1,678.0 1026.1,662.0 1040.0,654.0 1053.9,662.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="1053.9,1018.0 1040.0,1026.0 1026.1,1018.0 1026.1,1002.0 1040.0,994.0 1053.9,1002.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="1160.0,654.0 1173.9,678.0 1146.1,678.0" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<polygon points="1160.0,994.0 1173.9,1018.0 1146.1,1018.0" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1266.9" y="656.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<rect x="1266.9" y="996.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<circle cx="770" cy="840" r="34" fill="#E4A400" stroke="#EAF2F8" stroke-width="3"/><circle cx="763.2" cy="834.9" r="14" fill="#8A5A00"/><circle cx="760.2" cy="831.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="777.5" cy="828.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<circle cx="910" cy="840" r="34" fill="#5AAEE6" stroke="#EAF2F8" stroke-width="3"/><circle cx="903.2" cy="834.9" r="14" fill="#2B6E9A"/><circle cx="900.2" cy="831.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="917.5" cy="828.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<circle cx="1050" cy="840" r="34" fill="#16A085" stroke="#EAF2F8" stroke-width="3"/><circle cx="1043.2" cy="834.9" r="14" fill="#0B6150"/><circle cx="1040.2" cy="831.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="1057.5" cy="828.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<circle cx="1190" cy="840" r="34" fill="#D96B00" stroke="#EAF2F8" stroke-width="3"/><circle cx="1183.2" cy="834.9" r="14" fill="#8A3B00"/><circle cx="1180.2" cy="831.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="1197.5" cy="828.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<text x="55" y="670" text-anchor="start" dominant-baseline="middle" font-size="44" font-weight="bold" fill="#2B2B2B" font-family="Arial,Helvetica,sans-serif" >Fresh medium</text>
+<text x="210" y="755.0" text-anchor="start" dominant-baseline="middle" font-size="36" font-weight="bold" fill="#5F6368" font-family="Arial,Helvetica,sans-serif" >consumption links</text>
+<text x="55" y="840" text-anchor="start" dominant-baseline="middle" font-size="44" font-weight="bold" fill="#2B2B2B" font-family="Arial,Helvetica,sans-serif" >Cell phenotype</text>
+<text x="210" y="925.0" text-anchor="start" dominant-baseline="middle" font-size="36" font-weight="bold" fill="#5F6368" font-family="Arial,Helvetica,sans-serif" >production links</text>
+<text x="55" y="1010" text-anchor="start" dominant-baseline="middle" font-size="44" font-weight="bold" fill="#2B2B2B" font-family="Arial,Helvetica,sans-serif" >Spent medium</text>
+<rect x="785.0" y="1089.0" width="390" height="72" rx="34" fill="#DDEEFF" stroke="#2F80ED" stroke-width="3"/>
+<text x="980" y="1127" text-anchor="middle" dominant-baseline="middle" font-size="32" font-weight="normal" fill="#0F4A8A" font-family="Arial,Helvetica,sans-serif" >Consumption overlap</text>
+<path d="M680.0,1238.0 C680.0,1289.3 770.0,1300.7 770.0,1352.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M800.0,1238.0 C800.0,1289.3 770.0,1300.7 770.0,1352.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M920.0,1238.0 C920.0,1289.3 910.0,1300.7 910.0,1352.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1040.0,1238.0 C1040.0,1289.3 1050.0,1300.7 1050.0,1352.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1160.0,1238.0 C1160.0,1289.3 1050.0,1300.7 1050.0,1352.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1280.0,1238.0 C1280.0,1289.3 1190.0,1300.7 1190.0,1352.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M770.0,1428.0 C770.0,1479.3 920.0,1490.7 920.0,1542.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M910.0,1428.0 C910.0,1479.3 920.0,1490.7 920.0,1542.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1050.0,1428.0 C1050.0,1479.3 680.0,1490.7 680.0,1542.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1050.0,1428.0 C1050.0,1479.3 1040.0,1490.7 1040.0,1542.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1190.0,1428.0 C1190.0,1479.3 1160.0,1490.7 1160.0,1542.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M1190.0,1428.0 C1190.0,1479.3 1280.0,1490.7 1280.0,1542.0" fill="none" stroke="#9AA0A6" stroke-width="4" stroke-linecap="round" marker-end="url(#mgray)"/>
+<path d="M770.0,1428.0 C770.0,1479.3 920.0,1490.7 920.0,1542.0" fill="none" stroke="#4F9D1D" stroke-width="10" stroke-linecap="round" marker-end="url(#mgreen)"/>
+<path d="M910.0,1428.0 C910.0,1479.3 920.0,1490.7 920.0,1542.0" fill="none" stroke="#4F9D1D" stroke-width="10" stroke-linecap="round" marker-end="url(#mgreen)"/>
+<polygon points="680.0,1204.0 693.9,1228.0 666.1,1228.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<polygon points="680.0,1544.0 693.9,1568.0 666.1,1568.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<rect x="786.9" y="1206.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4"/>
+<rect x="786.9" y="1546.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="920.0,1204.0 933.6,1220.0 920.0,1236.0 906.4,1220.0" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="920.0,1544.0 933.6,1560.0 920.0,1576.0 906.4,1560.0" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="1053.9,1228.0 1040.0,1236.0 1026.1,1228.0 1026.1,1212.0 1040.0,1204.0 1053.9,1212.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="1053.9,1568.0 1040.0,1576.0 1026.1,1568.0 1026.1,1552.0 1040.0,1544.0 1053.9,1552.0" fill="rgb(240,170,150)" fill-opacity="0.14" stroke="#CC6E5E" stroke-width="4"/>
+<polygon points="1160.0,1204.0 1173.9,1228.0 1146.1,1228.0" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<polygon points="1160.0,1544.0 1173.9,1568.0 1146.1,1568.0" fill="rgb(240,170,150)" fill-opacity="0.23" stroke="#CC6E5E" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1266.9" y="1206.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<rect x="1266.9" y="1546.9" width="26.2" height="26.2" rx="4" fill="rgb(240,170,150)" fill-opacity="0.32" stroke="#CC6E5E" stroke-width="4"/>
+<circle cx="770" cy="1390" r="34" fill="#E4A400" stroke="#EAF2F8" stroke-width="3"/><circle cx="763.2" cy="1384.9" r="14" fill="#8A5A00"/><circle cx="760.2" cy="1381.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="777.5" cy="1378.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<circle cx="910" cy="1390" r="34" fill="#5AAEE6" stroke="#EAF2F8" stroke-width="3"/><circle cx="903.2" cy="1384.9" r="14" fill="#2B6E9A"/><circle cx="900.2" cy="1381.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="917.5" cy="1378.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<circle cx="1050" cy="1390" r="34" fill="#16A085" stroke="#EAF2F8" stroke-width="3"/><circle cx="1043.2" cy="1384.9" r="14" fill="#0B6150"/><circle cx="1040.2" cy="1381.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="1057.5" cy="1378.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<circle cx="1190" cy="1390" r="34" fill="#D96B00" stroke="#EAF2F8" stroke-width="3"/><circle cx="1183.2" cy="1384.9" r="14" fill="#8A3B00"/><circle cx="1180.2" cy="1381.9" r="4.9" fill="white" opacity="0.25"/><ellipse cx="1197.5" cy="1378.1" rx="7.5" ry="4.8" fill="white" opacity="0.35"/>
+<text x="55" y="1220" text-anchor="start" dominant-baseline="middle" font-size="44" font-weight="bold" fill="#2B2B2B" font-family="Arial,Helvetica,sans-serif" >Fresh medium</text>
+<text x="210" y="1305.0" text-anchor="start" dominant-baseline="middle" font-size="36" font-weight="bold" fill="#5F6368" font-family="Arial,Helvetica,sans-serif" >consumption links</text>
+<text x="55" y="1390" text-anchor="start" dominant-baseline="middle" font-size="44" font-weight="bold" fill="#2B2B2B" font-family="Arial,Helvetica,sans-serif" >Cell phenotype</text>
+<text x="210" y="1475.0" text-anchor="start" dominant-baseline="middle" font-size="36" font-weight="bold" fill="#5F6368" font-family="Arial,Helvetica,sans-serif" >production links</text>
+<text x="55" y="1560" text-anchor="start" dominant-baseline="middle" font-size="44" font-weight="bold" fill="#2B2B2B" font-family="Arial,Helvetica,sans-serif" >Spent medium</text>
+<rect x="785.0" y="1639.0" width="390" height="72" rx="34" fill="#E8F3DB" stroke="#84C45C" stroke-width="3"/>
+<text x="980" y="1677" text-anchor="middle" dominant-baseline="middle" font-size="32" font-weight="normal" fill="#2C6A1D" font-family="Arial,Helvetica,sans-serif" >Production overlap</text>
+</svg>

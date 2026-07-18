@@ -274,7 +274,7 @@ cellnum_init_all = cellnum_init_all[i_sublinear]
 cellnum_final_all = cellnum_final_all[i_sublinear]
 
 net_state = 'no-learn-balanced-net/'
-for n_ct in tqdm([2, 3, 4, 5, 6], desc='n_ct: '):
+for n_ct in tqdm([3, 4, 5, 6], desc='n_ct: '): # Using n_reps = 5 for n_ct = 2, and 150 for n_ct = 3, 4, 5, 6
     n_rand = 100
     n_reps = 150
     # npro_arr = np.repeat(np.array([50])[np.newaxis, :], n_reps*2, axis=1).ravel()
@@ -396,7 +396,7 @@ for n_ct in tqdm([2, 3, 4, 5, 6], desc='n_ct: '):
                 con_edges[ct_index[i_con]] = 2
                 con_edges[ct_index[~i_con]] = 0
                 
-                net_consumption.loc[:, 'edgeType'] = con_edges.copy()
+                net_consumption.loc[:, 'edgeType'] = con_edges[:]#.copy()
 
                 # net_consumption.iloc[ct_index[i_con], -1] = 2
                 # net_consumption.iloc[ct_index[~i_con], -1] = 0
