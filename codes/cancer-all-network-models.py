@@ -676,15 +676,17 @@ def run_replicate_with_null(all_params, n_null_replicates=20):
     all_null_params = np.concatenate([all_params, Twindow])
 
     bias_null = []
+    n_pred_list_null = []
     x_list_null = None
     null_params_list = [all_null_params] * n_null_replicates
     max_null_workers = min(n_null_replicates, 4)
     with ThreadPoolExecutor(max_workers=max_null_workers) as null_executor:
         for x_list_null_run, elist_null, n_pred_null, bias_null_run in null_executor.map(run_null_optimisation, null_params_list):
             bias_null.append(bias_null_run[-1])
+            n_pred_list_null.append(n_pred_null)
             x_list_null = x_list_null_run
 
-    return [x_ori, x, x_list, elist, bias_network, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null]
+    return [x_ori, x, x_list, elist, bias_network, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null, n_pred_list_null]
 
 
 def process_replicate_task(task):
@@ -698,7 +700,7 @@ def process_replicate_task(task):
         task['prod_rates_rand']
     ], dtype=object)
 
-    x_ori, x, x_list, elist, bias, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null = run_replicate_with_null(all_params, n_null_replicates=50)
+    x_ori, x, x_list, elist, bias, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null, n_pred_list_null = run_replicate_with_null(all_params, n_null_replicates=50)
 
     return {
         'n_ct': task['n_ct'],
@@ -722,6 +724,7 @@ def process_replicate_task(task):
         'i_list': i_list,
         'bias_null': bias_null,
         'x_list_null': x_list_null,
+        'n_pred_list_null': n_pred_list_null,
     }
 
 def calculate_overlap_stats(x, n_ct, max_links, met_ID):
@@ -1094,6 +1097,7 @@ if len(replicate_tasks) > 0:
         valid_index_before_list = [[]]
         valid_index_after_list = [[]]
         n_pred_list = [[]]
+        n_pred_list_null = [[]]
         residual_list = [[]]
         prod_overlap_list, con_overlap_list = [[]], [[]]
 
@@ -1116,6 +1120,7 @@ if len(replicate_tasks) > 0:
             valid_index_after_list.append(rep['i_list'][-1])
             log_bias_list_null.append(rep['bias_null'])
             x_all_list_null.append(rep['x_list_null'])
+            n_pred_list_null.append(rep['n_pred_list_null'])
 
         x_ori_list = np.array(x_ori_list[1:])
         x_optim_list = np.array(x_optim_list[1:])
@@ -1126,6 +1131,7 @@ if len(replicate_tasks) > 0:
         log_bias_combined_list = np.array(log_bias_combined_list[1:], dtype=object)
         log_bias_list_null = np.array(log_bias_list_null[1:], dtype=object)
         n_pred_list = np.array(n_pred_list[1:], dtype=object)
+        n_pred_list_null = np.array(n_pred_list_null[1:], dtype=object)
         residual_list = np.array(residual_list[1:], dtype=object)
         prod_overlap_list = np.array(prod_overlap_list[1:], dtype=object)
         con_overlap_list = np.array(con_overlap_list[1:], dtype=object)
@@ -1146,7 +1152,7 @@ if len(replicate_tasks) > 0:
         with open(pickle_path + "/reward-"+str(reward)+"-penalty-"+str(penalty)+"-optimised_network_output.pickle", "wb") as pickle_out:
             pickle.dump([
                 x_all_list, x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, log_bias_list_null, x_all_list_null,
-                n_pred_list, residual_list, case_data['balance_flag_list'], prod_overlap_list, con_overlap_list,
+                n_pred_list, n_pred_list_null, residual_list, case_data['balance_flag_list'], prod_overlap_list, con_overlap_list,
                 metabolome_pred_before_list, metabolome_meas_before_list,
                 metabolome_pred_after_list, metabolome_meas_after_list,
                 valid_index_before_list, valid_index_after_list], pickle_out, protocol=2)
