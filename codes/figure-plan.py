@@ -1002,7 +1002,7 @@ p = sns.histplot(data=pd.concat([pooled_df_null, pooled_df]), x='OverlapLen',
                  multiple='dodge', stat='probability',
                  common_norm=False, ax=axes[0])
 p.set_xlabel(r'# overlapping links')
-p.set_yscale('log')
+# p.set_yscale('log')
 p.xaxis.set_major_locator(MaxNLocator(integer=True))
 axes[0].text(-0.15, 1.05, 'E', transform=axes[0].transAxes, fontsize=20, fontweight='bold')
 

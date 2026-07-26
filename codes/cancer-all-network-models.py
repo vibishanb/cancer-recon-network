@@ -11,22 +11,18 @@ Data:   20/06/2025, 11:09:25
 # %%
 import pandas as pd
 import numpy as np
+from numpy import matlib
 import matplotlib.pyplot as plt
-import seaborn as sns
-from matplotlib.gridspec import GridSpec
-from matplotlib.collections import LineCollection
 from scipy.sparse import csr_matrix
 import pickle
 from scipy.optimize import minimize
 from scipy.stats import pearsonr, gmean, gstd
-import networkx as nx
 from multiprocessing import get_context
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import warnings
-from itertools import compress, combinations
+from itertools import combinations
 
 import os
-import numpy.matlib
 # import all_plots
 from tqdm import tqdm
 
@@ -659,24 +655,14 @@ def run_replicate_with_null(all_params, n_null_replicates=20):
 
     bias_null = []
     n_pred_list_null = []
-<<<<<<< HEAD
     x_list_null = []
-=======
-    x_list_null = None
->>>>>>> c190b73a760468d83ca8cd3cb58d79084d36793d
     null_params_list = [all_null_params] * n_null_replicates
     max_null_workers = min(n_null_replicates, 4)
     with ThreadPoolExecutor(max_workers=max_null_workers) as null_executor:
         for x_list_null_run, elist_null, n_pred_null, bias_null_run in null_executor.map(run_null_optimisation, null_params_list):
-<<<<<<< HEAD
             bias_null.append(bias_null_run)
             n_pred_list_null.append(n_pred_null)
             x_list_null.append(x_list_null_run)
-=======
-            bias_null.append(bias_null_run[-1])
-            n_pred_list_null.append(n_pred_null)
-            x_list_null = x_list_null_run
->>>>>>> c190b73a760468d83ca8cd3cb58d79084d36793d
 
     return [x_ori, x, x_list, elist, bias_network, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null, n_pred_list_null]
 
@@ -692,11 +678,7 @@ def process_replicate_task(task):
         task['prod_rates_rand']
     ], dtype=object)
 
-<<<<<<< HEAD
     x_ori, x, x_list, elist, bias, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null, n_pred_list_null = run_replicate_with_null(all_params, n_null_replicates=10)
-=======
-    x_ori, x, x_list, elist, bias, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null, n_pred_list_null = run_replicate_with_null(all_params, n_null_replicates=50)
->>>>>>> c190b73a760468d83ca8cd3cb58d79084d36793d
 
     return {
         'n_ct': task['n_ct'],
