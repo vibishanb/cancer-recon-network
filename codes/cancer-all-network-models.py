@@ -510,9 +510,9 @@ def run_network_optimisation(all_params):
 
         else:  ## not accepted   
             x[[i_x]] = x_previous[[i_x]] # Maintain the previous state
-            n_pred_init = n_pred
-            residual_init = residual_after.copy()
-
+            # n_pred_init = n_pred
+            # residual_init = residual_after.copy()
+        
         if (i > Twindow) and (error_window[-1] - error_window[-Twindow]) > -0.067:#-(np.sqrt(Twindow)*kT)):
             break
     
@@ -577,17 +577,10 @@ def run_null_optimisation(all_params):
     residual_init = np.abs(balance - 1).sum() # This residual term will be zero when the balance becomes 1 for all celltypes
 
     error_before, metabolome_pred, metabolome_measured, i_final, bias_metabolome, log_bias_init, log_bias_combined_init, n_pred, residual_init, num_prod_overlap, num_con_overlap = pred_error_addingLinks(n_pred_init, residual_init, x_ori, net_ori, f, cl, diet, prod_rates_rand, in_degree_flag, cellnum_init, cellnum_final, pred_params)
-    # metabolome_pred_list.append(metabolome_pred)
-    # metabolome_measured_list.append(metabolome_measured)
-    # valid_index_list.append(i_final)
     log_bias_list.append(log_bias_init)
-    # log_bias_combined_list.append(log_bias_combined_init)
     n_pred_list.append(n_pred)
-    # residual_list.append(residual_init)
     x_list.append(x_ori)
     bias_metabolome_ori = bias_metabolome.copy()
-    # prod_overlap_list.append(num_prod_overlap)
-    # con_overlap_list.append(num_con_overlap)
 
     ## Partitioning of the metabolome based on number of celltypes assumed; The array prod_celltype is a vector that codes which celltype is assumed to produce each metabolite under partition.
     quantiles = np.quantile(metabolome_measured, np.linspace(0, 1, MAX_ID_celltypes+1)[1:-1])
@@ -605,10 +598,9 @@ def run_null_optimisation(all_params):
     kT = all_params[9]
     Twindow = all_params[-1]#500
     error_window = []
-    for i in range(20000):
+    for i in range(Twindow):
         linknum = np.random.randint(2, n_ct)
         error_window.append(error_before)
-        x_previous = x.copy()
         if np.random.uniform(0,1,1)[0] <= 0.5: # Each step chooses randomly between adding a new link or removing an existing link
             i_x = np.random.choice(np.where(x==0)[0], linknum, p=prior_prob[x==0]/prior_prob[x==0].sum())[0] # New link is chosen based on the prior probability-smaller bias in prediction leads to smaller prior prob
             x[i_x] = 1
@@ -617,14 +609,17 @@ def run_null_optimisation(all_params):
             max_links = m2b.shape[0]*m2b.shape[1]
             # current consumption matrix
             curr_cons = x[:max_links].reshape(MAX_ID_celltypes, MAX_ID_metabolites)
+            # Total consumers per metabolite; a link is only deletable if the metabolite
+            # retains at least one other consumer, keeping it in i_filt and preserving n_pred.
+            met_cons_count = curr_cons.sum(0)
             deletable_mask = np.zeros(max_links, dtype=bool)
             for row in range(MAX_ID_celltypes):
                 # celltype can afford to lose a consumption link only if it currently has more than 1 consumption link
                 if curr_cons[row].sum() > 1:
                     start = row * MAX_ID_metabolites
                     end = start + MAX_ID_metabolites
-                    # deletable positions in this row are those where a consumption link exists
-                    deletable_mask[start:end] = curr_cons[row] == 1
+                    # Deletable: link exists AND the metabolite still has another consumer after deletion
+                    deletable_mask[start:end] = (curr_cons[row] == 1) & (met_cons_count > 1)
             # indices currently set (x==1) that are deletable: consumption deletable OR production links
             deletable_indices = np.where((x==1) & np.concatenate([deletable_mask, np.ones_like(deletable_mask)]))[0]
             if deletable_indices.size == 0:
@@ -644,26 +639,13 @@ def run_null_optimisation(all_params):
         error_diff_list.append(error_after - error_before)
         error_before = error_after
         error_list.append(error_before)
-        # prior_list.append(prior_prob[[i_x]])
         log_bias_list.append(log_bias)
-        # log_bias_combined_list.append(log_bias_combined)
-        # metabolome_pred_list.append(metabolome_pred)
-        # metabolome_measured_list.append(metabolome_measured)
-        # valid_index_list.append(i_final)
         n_pred_list.append(n_pred)
-        # residual_list.append(residual_after)
-        # prod_overlap_list.append(num_prod_overlap)
-        # con_overlap_list.append(num_con_overlap)
         x_list.append(x.copy())
         n_pred_init = n_pred
         residual_init = residual_after.copy()
 
-        # else:  ## not accepted   
-        #     x[[i_x]] = x_previous[[i_x]] # Maintain the previous state
-        #     n_pred_init = n_pred
-        #     residual_init = residual_after.copy()
-
-        if (i > Twindow): #and (error_window[-1] - error_window[-Twindow]) > -0.067:#-(np.sqrt(Twindow)*kT)):
+        if (i >= Twindow): #and (error_window[-1] - error_window[-Twindow]) > -0.067:#-(np.sqrt(Twindow)*kT)):
             break
     
     return [x_list, error_diff_list, n_pred_list, log_bias_list]#, consumption_added, production_added, consumption_deleted, production_deleted]
@@ -672,19 +654,21 @@ def run_null_optimisation(all_params):
 def run_replicate_with_null(all_params, n_null_replicates=20):
     """Optimise a replicate network and then run null simulations for the same network."""
     kT, penalty, reward, f, x_ori, x, x_list, elist, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_network, bias_combined, ewindow = run_network_optimisation(all_params)
-    Twindow = [len(bias_network)]
+    Twindow = [len(bias_network) - 1] # Minus 1 to ignore the first entry which is the original network before any optimisation steps
     all_null_params = np.concatenate([all_params, Twindow])
 
     bias_null = []
-    x_list_null = None
+    n_pred_list_null = []
+    x_list_null = []
     null_params_list = [all_null_params] * n_null_replicates
     max_null_workers = min(n_null_replicates, 4)
     with ThreadPoolExecutor(max_workers=max_null_workers) as null_executor:
         for x_list_null_run, elist_null, n_pred_null, bias_null_run in null_executor.map(run_null_optimisation, null_params_list):
-            bias_null.append(bias_null_run[-1])
-            x_list_null = x_list_null_run
+            bias_null.append(bias_null_run)
+            n_pred_list_null.append(n_pred_null)
+            x_list_null.append(x_list_null_run)
 
-    return [x_ori, x, x_list, elist, bias_network, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null]
+    return [x_ori, x, x_list, elist, bias_network, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null, n_pred_list_null]
 
 
 def process_replicate_task(task):
@@ -698,7 +682,7 @@ def process_replicate_task(task):
         task['prod_rates_rand']
     ], dtype=object)
 
-    x_ori, x, x_list, elist, bias, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null = run_replicate_with_null(all_params, n_null_replicates=50)
+    x_ori, x, x_list, elist, bias, bias_combined, n_pred, residual, prod_overlap, con_overlap, met_pred_list, met_measured_list, i_list, bias_null, x_list_null, n_pred_list_null = run_replicate_with_null(all_params, n_null_replicates=10)
 
     return {
         'n_ct': task['n_ct'],
@@ -722,6 +706,7 @@ def process_replicate_task(task):
         'i_list': i_list,
         'bias_null': bias_null,
         'x_list_null': x_list_null,
+        'n_pred_list_null': n_pred_list_null,
     }
 
 def calculate_overlap_stats(x, n_ct, max_links, met_ID):
@@ -1094,6 +1079,7 @@ if len(replicate_tasks) > 0:
         valid_index_before_list = [[]]
         valid_index_after_list = [[]]
         n_pred_list = [[]]
+        n_pred_list_null = [[]]
         residual_list = [[]]
         prod_overlap_list, con_overlap_list = [[]], [[]]
 
@@ -1116,6 +1102,7 @@ if len(replicate_tasks) > 0:
             valid_index_after_list.append(rep['i_list'][-1])
             log_bias_list_null.append(rep['bias_null'])
             x_all_list_null.append(rep['x_list_null'])
+            n_pred_list_null.append(rep['n_pred_list_null'])
 
         x_ori_list = np.array(x_ori_list[1:])
         x_optim_list = np.array(x_optim_list[1:])
@@ -1126,6 +1113,7 @@ if len(replicate_tasks) > 0:
         log_bias_combined_list = np.array(log_bias_combined_list[1:], dtype=object)
         log_bias_list_null = np.array(log_bias_list_null[1:], dtype=object)
         n_pred_list = np.array(n_pred_list[1:], dtype=object)
+        n_pred_list_null = np.array(n_pred_list_null[1:], dtype=object)
         residual_list = np.array(residual_list[1:], dtype=object)
         prod_overlap_list = np.array(prod_overlap_list[1:], dtype=object)
         con_overlap_list = np.array(con_overlap_list[1:], dtype=object)
@@ -1146,7 +1134,7 @@ if len(replicate_tasks) > 0:
         with open(pickle_path + "/reward-"+str(reward)+"-penalty-"+str(penalty)+"-optimised_network_output.pickle", "wb") as pickle_out:
             pickle.dump([
                 x_all_list, x_ori_list, x_optim_list, error_plot_list, log_bias_list, log_bias_combined_list, log_bias_list_null, x_all_list_null,
-                n_pred_list, residual_list, case_data['balance_flag_list'], prod_overlap_list, con_overlap_list,
+                n_pred_list, n_pred_list_null, residual_list, case_data['balance_flag_list'], prod_overlap_list, con_overlap_list,
                 metabolome_pred_before_list, metabolome_meas_before_list,
                 metabolome_pred_after_list, metabolome_meas_after_list,
                 valid_index_before_list, valid_index_after_list], pickle_out, protocol=2)
