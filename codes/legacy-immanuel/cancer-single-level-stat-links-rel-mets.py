@@ -47,74 +47,72 @@ def figure_size_setting(WIDTH):
 
 # %%
 ########### import the pickled file containing all processed data which are useful for simulations (the processing is
-########### done in "Trophic_model_for_gut_data_processing.ipynb")
+########### done in "cancer-data-processing.py")
 import pickle
 pickle_in = open("cancer_network.pickle","rb")
-net, i_intake, names = pickle.load(pickle_in)
+all_networks, i_intake, names = pickle.load(pickle_in)
 # i_selfish = 0
 
 pickle_in = open("data.pickle","rb")
-celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, ic_metabolome_ID, ic_metabolome = pickle.load(pickle_in)
+celltype_ID, celltypefreq, ec_metabolome_ID, ec_metabolome, met_baseline, core_mean = pickle.load(pickle_in)
 
-
-# ## Create maps of celltypes and metabolites to their reduced matrix forms
 
 # %%
-i_nonzero_celltypes = net['celltypes_ID'].unique()
-i_nonzero_celltypes = np.sort(i_nonzero_celltypes)
-i_nonzero_celltypes = celltype_ID.values.copy()
-i_nonzero_metabolites = net['metabolites_ID'].unique()
-i_nonzero_metabolites = np.sort(i_nonzero_metabolites)
-
-
-df_metabolites = pd.DataFrame.from_dict({'oldID': i_nonzero_metabolites, 'newID':list(range(len(i_nonzero_metabolites)))})
-df_metabolites.set_index('oldID', inplace=True)
-df_celltypes = pd.DataFrame.from_dict({'oldID': i_nonzero_celltypes, 'newID':list(range(len(i_nonzero_celltypes)))})
-df_celltypes.set_index('oldID', inplace=True)
-
-
-outgoingNodes = df_metabolites.reindex(net['metabolites_ID'].values).values.flatten()
-ingoingNodesTemp = df_celltypes.reindex(net['celltypes_ID'].values).values.flatten()
-edge_types = net.iloc[~np.isnan(ingoingNodesTemp),3].values
-outgoingNodes = outgoingNodes[~np.isnan(ingoingNodesTemp)]
-ingoingNodes = ingoingNodesTemp[~np.isnan(ingoingNodesTemp)].astype(int)
-
-net_reduced = pd.DataFrame.from_dict({'metabolites': outgoingNodes, 'celltypes':ingoingNodes, 'edgeType':edge_types})
-net = net_reduced.copy()
-net_temp = net.copy()
-net['edgeType'][net['edgeType']==5] = 2
-net_temp['edgeType'][net_temp['edgeType']==5] = 3
-net = pd.concat([net, net_temp]).drop_duplicates() #net.append(net_temp).drop_duplicates()
-net_ori = net.copy()
-
-celltype_ID_reduced = df_celltypes.reindex(celltype_ID).values.flatten()
-celltype_ID = celltype_ID_reduced[~np.isnan(celltype_ID_reduced)].astype(int)
-
-metabolome_ID_reduced = df_metabolites.reindex(ec_metabolome_ID).values.flatten()
-metabolome_ID = metabolome_ID_reduced[~np.isnan(metabolome_ID_reduced)].astype(int)
-
-
-# i_selfish_reduced = df_celltypes.reindex(i_selfish).values.flatten()
-# i_selfish = i_selfish_reduced[~np.isnan(i_selfish_reduced)].astype(int)
-
-i_intake_reduced = df_metabolites.loc[i_intake].values.flatten()
-i_intake = i_intake_reduced[~np.isnan(i_intake_reduced)].astype(int)
-
-
-# ## Run the simulation with reduced matrix forms for one individual
-
-# %%
-################################# Predict metabolome from individual's metagenome.
+################ All functions
 from numpy import array
 from scipy.sparse import csr_matrix
 import numpy.matlib
 from scipy.optimize import minimize
 from scipy.stats import pearsonr
 
-MAX_ID_celltypes = len(i_nonzero_celltypes)  # MAX_ID_celltypes is the maximum of ID labels for celltypes.
-MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
 
-def Ain_out(ct_hyp, x, net):
+def get_network(net):
+
+    i_nonzero_celltypes = net['celltypes_ID'].unique()
+    i_nonzero_celltypes = np.sort(i_nonzero_celltypes)
+    i_nonzero_celltypes = celltype_ID.values.copy()
+    i_nonzero_metabolites = net['metabolites_ID'].unique()
+    i_nonzero_metabolites = np.sort(i_nonzero_metabolites)
+
+    MAX_ID_celltypes = len(i_nonzero_celltypes)  # MAX_ID_celltypes is the maximum of ID labels for celltypes.
+    MAX_ID_metabolites = len(i_nonzero_metabolites)  # MAX_ID_metabolites is the maximum of ID labels for metabolites.
+
+    df_metabolites = pd.DataFrame.from_dict({'oldID': i_nonzero_metabolites, 'newID':list(range(len(i_nonzero_metabolites)))})
+    df_metabolites.set_index('oldID', inplace=True)
+    df_celltypes = pd.DataFrame.from_dict({'oldID': i_nonzero_celltypes, 'newID':list(range(len(i_nonzero_celltypes)))})
+    df_celltypes.set_index('oldID', inplace=True)
+
+
+    outgoingNodes = df_metabolites.reindex(net['metabolites_ID'].values).values.flatten()
+    ingoingNodesTemp = df_celltypes.reindex(net['celltypes_ID'].values).values.flatten()
+    edge_types = net.iloc[~np.isnan(ingoingNodesTemp),3].values
+    outgoingNodes = outgoingNodes[~np.isnan(ingoingNodesTemp)]
+    ingoingNodes = ingoingNodesTemp[~np.isnan(ingoingNodesTemp)].astype(int)
+
+    net_reduced = pd.DataFrame.from_dict({'metabolites': outgoingNodes, 'celltypes':ingoingNodes, 'edgeType':edge_types})
+    net = net_reduced.copy()
+    net_temp = net.copy()
+    net['edgeType'][net['edgeType']==5] = 2
+    net_temp['edgeType'][net_temp['edgeType']==5] = 3
+    net = pd.concat([net, net_temp]).drop_duplicates() #net.append(net_temp).drop_duplicates()
+    net_ori = net.copy()
+
+    celltype_ID_reduced = df_celltypes.reindex(celltype_ID).values.flatten()
+    celltype_ID_reduced = celltype_ID_reduced[~np.isnan(celltype_ID_reduced)].astype(int)
+
+    metabolome_ID_reduced = df_metabolites.reindex(ec_metabolome_ID).values.flatten()
+    metabolome_ID_reduced = metabolome_ID_reduced[~np.isnan(metabolome_ID_reduced)].astype(int)
+
+
+    # i_selfish_reduced = df_celltypes.reindex(i_selfish).values.flatten()
+    # i_selfish = i_selfish_reduced[~np.isnan(i_selfish_reduced)].astype(int)
+
+    i_intake_reduced = df_metabolites.loc[i_intake].values.flatten()
+    i_intake_reduced = i_intake_reduced[~np.isnan(i_intake_reduced)].astype(int)
+
+    return net, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites
+
+def Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
     Ain_out is a function used to create sparse matrices made of metabolites and celltypes 
     where metabolite consumption and production is considered. The matrices created are "m2b" and "b2m":
@@ -150,7 +148,8 @@ def Ain_out(ct_hyp, x, net):
     # in_degree = m2b.sum(1)
     # in_degree[in_degree==0]=1e6
     # m2b = m2b / numpy.matlib.repmat(in_degree[:,np.newaxis], 1, MAX_ID_celltypes)
-    ct_hyp_repmat = numpy.matlib.repmat(ct_hyp[np.newaxis,:], MAX_ID_metabolites, 1)
+    ct_freq = ct_hyp/ct_hyp.sum()
+    ct_hyp_repmat = numpy.matlib.repmat(ct_freq[np.newaxis,:], MAX_ID_metabolites, 1)
     m2b = m2b * ct_hyp_repmat # Uptake is proportional to cell type relative abundance
     m2b = np.asarray([i*j for i, j in zip(m2b, x.to_numpy(dtype=float))]) # Relative amount of nutrient taken up
     m2b = m2b/in_degree
@@ -159,7 +158,7 @@ def Ain_out(ct_hyp, x, net):
     b2m = np.float32(b2m)
     return [m2b, b2m]
 
-def m2b_multiple_levels(f, m2b, b2m, numLevels_max):
+def m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
     m2b_multiple_levels is a function used to generate matrices involving the calculation of metabolite 
     byproducts and microbial biomass after several trophic levels/layers. Those matrices are:
@@ -195,7 +194,7 @@ def m2b_multiple_levels(f, m2b, b2m, numLevels_max):
     m2b_total = np.dot((1 - f_mul) * m2b.T, m2b_total) # m2b_total has an extra multiplication of m2b and (1-f).
     return [m2b_total, m2m_total, m2m_layer]
 
-def pred_error(ct_hyp, net, numLevels_max, f, x, ec_real):
+def pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
     pred_error is a function used to compute the logarithmic error between experimentally measured
     metagenome and predicted metagenome computed from the model for a certain nutrient intake. It relies on 
@@ -205,16 +204,16 @@ def pred_error(ct_hyp, net, numLevels_max, f, x, ec_real):
     experimentally measured net gain in intracellular metabolome "ic_real".
     '''
 
-    m2b, b2m = Ain_out(ct_hyp, x, net)
-    m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(f, m2b, b2m, numLevels_max)
+    m2b, b2m = Ain_out(ct_hyp, x, net, MAX_ID_metabolites, MAX_ID_celltypes)
+    m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
     
     ec_pred = m2m_total.sum(0) # Row sum of the final secretion matrix gives the extracellular metabolome since cell type abundances and relative abundances in the diet have been accounted in previous steps already.
     
-    pred_error = (np.log10(ec_pred + 1e-10) - np.log10(ec_real + 1e-10)) / np.log10(ec_real +1e-6)
+    pred_error = (np.log10(ec_pred + 1e-10) - np.log10(ec_real + 1e-10)) / np.log10(ec_real +1e-10)
     pred_error = np.sqrt(np.dot(pred_error, pred_error.T)) #np.sqrt(np.sum(pred_error**2))
     return pred_error
 
-def calc_metabolome(x, m2b, m2m_total, numLevels_max):
+def calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes):
     '''
     calc_metabolome is a function used to calculate the metabolome from the fitted nutrient intake from the
     model. It relies on (1) x: the nutrient intake, (2) i_intake: IDs of the nutrient intake, (3) m2m_layer: 
@@ -241,13 +240,15 @@ def calc_metabolome(x, m2b, m2m_total, numLevels_max):
             
     return [met_levels, met_leftover_levels]
 
-def run_network_model(f, col_name):
+def run_network_model(f, x, col_name, net, MAX_ID_metabolites, MAX_ID_celltypes):
     # f_byproduct = 0.9
     f_name = str(f.round(decimals = 2))
     f = f * np.ones((MAX_ID_celltypes,1))
     # f[i_selfish] = 0.0;  # The byproduct/leakage fraction f for celltypes that don't generate byproducts is set as 0.
 
     numLevels_max = 1
+    # cellnum_max = 2.4e+05
+    # cellnum_init = 1e+04
 
     ######## Pull out experimentally measured intracellular metabolite net gain for one cell type
     # pa = 5; 
@@ -255,30 +256,31 @@ def run_network_model(f, col_name):
     # ic_real = ic_real/ic_real.sum() # Relative intracellular metabolite abundances
     ct0 = celltypefreq.to_numpy() # Prior cell type relative frequencies
     ec_real = ec_metabolome[col_name].to_numpy(dtype=float)
+    ec_real = ec_real/ec_real.sum()
     # b_real[metagenome_ID] = metagenome.iloc[:,pa] / np.sum(metagenome.iloc[:,pa])
 
     ######## Assign diet using 0h extracellular measurement from Immanuel et al.
-    diet = pd.read_csv('../input-data/diet.csv')
-    diet = diet[np.isin(diet['metabolites_ID'], ic_metabolome_ID)]
-    x = diet.loc[:, col_name]
-    x = np.clip(x/x.sum(), 0, np.inf) # Initial relative abundances of metabolites in the diet
+    # diet = pd.read_csv('../input-data/diet.csv')
+    # diet = diet[np.isin(diet['metabolites_ID'], ic_metabolome_ID)]
+    # x = np.clip(diet.loc[:, col_name], 0, np.inf) # Initial absolute abundances of metabolites in the diet
+    x = x/x.sum() # Initial relative abundances of metabolites in the diet
 
 
     ######## Compute matrices involving the metabolite consumption and generation:
-    m2b, b2m = Ain_out(ct0, x, net)
-    m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(f, m2b, b2m, numLevels_max)
+    m2b, b2m = Ain_out(ct0, x, net, MAX_ID_metabolites, MAX_ID_celltypes)
+    m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(f, m2b, b2m, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
     #m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(i_nonzero_celltypes, i_nonzero_metabolites, f, m2b, b2m, numLevels_max)
 
     ######## The model is converted into an optimization problem where the nutrient intake is constantly changed to
     # minimize the logarithmic error between experimentally measured metagenome and predicted metagenome computed 
     # from the model for a certain nutrient intake.
-    fun = lambda ct_hyp: pred_error(ct_hyp, net, numLevels_max, f, x, ec_real)
+    fun = lambda ct_hyp: pred_error(ct_hyp, net, numLevels_max, f, x, ec_real, MAX_ID_metabolites, MAX_ID_celltypes)
     bnds = ((0, 1), ) * len(ct0)
-    constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - 1.}
-    # res = minimize(fun, ct0, method='SLSQP', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
+    constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - 1}
+    res = minimize(fun, ct0, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
     # res = minimize(fun, ct0, method='Nelder-Mead', bounds=bnds, options={'disp': True, 'maxiter': 1000}, tol=1e-3)
-    res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
-    print(res)
+    # res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
+    # print(res)
 
     ######## As long as the optimized nutrient intake is found by using the above optimization solver, the
     # optimized nutrient intake "res.x" is used to generate the predict metagenome and metabolome. They are
@@ -299,7 +301,7 @@ def run_network_model(f, col_name):
     # ax.set_title('Intracellular metabolome comparison')
     # fig.savefig('../figures/one-celltype-static-net/ic-pred-correlation-'+figname+'.png', dpi=300.)
 
-    met_levels, met_leftover_levels = calc_metabolome(x, m2b, m2m_total, numLevels_max)
+    met_levels, met_leftover_levels = calc_metabolome(x, m2b, m2m_total, numLevels_max, MAX_ID_metabolites, MAX_ID_celltypes)
     # metabolome_measured = np.zeros((MAX_ID_metabolites,))
     metabolome_measured = ec_metabolome[col_name].to_numpy(dtype=float)
     # metabolome_measured = metabolome_measured/metabolome_measured.sum()
@@ -308,8 +310,8 @@ def run_network_model(f, col_name):
     metabolome_pred = met_levels + met_leftover_levels.sum(1) #np.dot(m2m_total, x_full)
     #metabolome_pred = np.dot(m2m_total, x_full)
     i_common = np.where(metabolome_measured * metabolome_pred > 1e-5)[0]
-    metabolome_pred_common = metabolome_pred[i_common] / np.sum(metabolome_pred[i_common])
-    metabolome_measured_common = metabolome_measured[i_common] / np.sum(metabolome_measured[i_common])
+    metabolome_pred_common = metabolome_pred[i_common] #/ np.sum(metabolome_pred[i_common])
+    metabolome_measured_common = metabolome_measured[i_common] #/ np.sum(metabolome_measured[i_common])
 
     #### Metabolome comparison
     fig, ax = plt.subplots()
@@ -334,42 +336,52 @@ def run_network_model(f, col_name):
 
 
 # %%
-###### Actually run the model for whatever replicates we have
-f_arr = np.linspace(0.1, 1, 10)
-celline_names = ['U87MG', 'NSP']
+###### Model initialisation
+f_arr = np.linspace(0.1, 1, 5)
+cell_line_names = core_mean.loc[:, 'Cell line'].to_numpy()
 
-# ic_corr = np.zeros((len(f_arr), len(celline_names)))
-ec_corr = np.zeros((len(f_arr), len(celline_names)))
+######## Diet as the average of all the Baseline values
+diet = met_baseline.mean(axis=1)
+
+# ic_corr = np.zeros((len(f_arr), len(cell_line_names)))
+ec_corr = np.zeros((len(f_arr), len(cell_line_names)))
 ct_full = ec_corr.copy()
 
-for i in range(len(f_arr)):
-    for j in range(len(celline_names)):
-        ec_corr[i, j], ct_full[i, j] = run_network_model(f_arr[i], celline_names[j])
+ ## Source for initial and final cell numbers for the various cell lines: https://www.thermofisher.com/in/en/home/references/gibco-cell-culture-basics/cell-culture-protocols/cell-culture-useful-numbers.html
+n_lines = len(core_mean.loc[:, 'Cell line'])
+# nonadh_cell_lines = ['SR', 'MOLT-4', 'HL-60(TB)', 'K562', 'RPMI 8226', 'CCRF-CEM']
+# i_nonadh = np.where(np.isin(core_mean.loc[:, 'Cell line'], nonadh_cell_lines))[0]
 
-# plt.imshow(ic_corr.T, cmap='viridis')
-# plt.colorbar()
-# plt.xticks(ticks=np.arange(len(f_arr)), labels=f_arr.round(decimals=2), rotation=45)
-# plt.yticks(ticks=[0, 1], labels=celline_names)
-# plt.title('Pearsons r: Intracellular conc')
-# plt.xlabel('Byproduct fraction, f')
-# plt.ylabel('Cell line')
-# plt.savefig('../figures/one-celltype-static-net/intracellular-relative-conc-pearsonr.png', dpi=300.)
+# t75_cell_lines = ['NCI-H460', 'HCC-2998', 'SW620']
+# i_t75 = np.where(np.isin(cell_line_names, t75_cell_lines))[0]
+# cellnum_init_all = np.array([4.9e+06]*n_lines)
+# cellnum_init_all[i_t75] = 2.1e+06
+# cellnum_final_all = np.array([23.3e+06]*n_lines)
+# cellnum_final_all[i_t75] = 8.4e+06
 
 # %%
-plt.imshow(ec_corr.T, cmap='viridis')
-plt.colorbar()
-plt.xticks(ticks=np.arange(len(f_arr)), labels=f_arr.round(decimals=2), rotation=45)
-plt.yticks(ticks=[0, 1], labels=celline_names)
+####### Run the model over the initialised parameters
+for i, f in enumerate(f_arr):
+    for j, net in enumerate(all_networks):
+        net_corrected, i_nonzero_celltypes, i_nonzero_metabolites, MAX_ID_celltypes, MAX_ID_metabolites = get_network(net)
+
+        ec_corr[i, j], ct_full[i, j] = run_network_model(f, diet, cell_line_names[j], net_corrected, MAX_ID_metabolites, MAX_ID_celltypes)
+
+# %%
+f, ax = plt.subplots(figsize=(10, 10))
+corr_df = pd.DataFrame(ec_corr.T, columns=f_arr, index=cell_line_names)
+sns.heatmap(data=corr_df, linewidth=0.5, cmap='crest', ax=ax)
+
 plt.title('Pearsons r: Extracellular conc')
 plt.xlabel('Byproduct fraction, f')
 plt.ylabel('Cell line')
-plt.savefig('../figures/one-celltype-static-net/relative-abundance/extracellular-relative-conc-pearsonr.png', dpi=300.)
+plt.savefig('../figures/one-celltype-static-net/relative-abundance/extracellular-conc-pearsonr.png', dpi=300.)
 
 # %%
-plt.imshow(ct_full.T, cmap='viridis')
-plt.colorbar()
-plt.xticks(ticks=np.arange(len(f_arr)), labels=f_arr.round(decimals=2), rotation=45)
-plt.yticks(ticks=[0, 1], labels=celline_names)
+f, ax = plt.subplots(figsize=(10, 10))
+ct_df = pd.DataFrame(ct_full.T, columns=f_arr, index=cell_line_names)
+sns.heatmap(data=ct_df, linewidth=0.5, cmap='crest', ax=ax)
+
 plt.title('Cell type abundance')
 plt.xlabel('Byproduct fraction, f')
 plt.ylabel('Cell line')
@@ -385,21 +397,23 @@ plt.savefig('../figures/one-celltype-static-net/relative-abundance/celltype-abun
 # # f[i_selfish] = 0.0;  # The byproduct/leakage fraction f for celltypes that don't generate byproducts is set as 0.
 
 # numLevels_max = 1
+# cellnum_init = 1e+04
+# cellnun_max = 2.4e+07
 
 # ######## Pull out experimentally measured intracellular metabolite net gain for one cell type
 # # pa = 5; 
 # # ic_real = ic_metabolome[col_name].to_numpy(dtype=np.float64)
 # # ic_real = ic_real/ic_real.sum() # Relative intracellular metabolite abundances
-# ct0 = celltypefreq.to_numpy() # Prior cell type relative frequencies
+# ct0 = cellnum_init*celltypefreq.to_numpy() # Prior cell type relative frequencies
 # ec_real = ec_metabolome[col_name].to_numpy(dtype=float)
-# ec_norm = ec_real/ec_real.sum()
+# # ec_real = np.clip(ec_real, 0, np.inf)
 # # b_real[metagenome_ID] = metagenome.iloc[:,pa] / np.sum(metagenome.iloc[:,pa])
 
 # ######## Assign diet using 0h extracellular measurement from Immanuel et al.
 # diet = pd.read_csv('../input-data/diet.csv')
 # diet = diet[np.isin(diet['metabolites_ID'], ic_metabolome_ID)]
 # x = diet.loc[:, col_name]
-# x = x/x.sum() # Initial relative abundances of metabolites in the diet
+# x = np.clip(x, 0, np.inf) # Initial relative abundances of metabolites in the diet
 
 
 # ######## Compute matrices involving the metabolite consumption and generation:
@@ -408,9 +422,9 @@ plt.savefig('../figures/one-celltype-static-net/relative-abundance/celltype-abun
 # #m2b_total, m2m_total, m2m_layer = m2b_multiple_levels(i_nonzero_celltypes, i_nonzero_metabolites, f, m2b, b2m, numLevels_max)
 
 # # %% Run optimisation
-# fun = lambda ct_hyp: pred_error(ct_hyp, net, numLevels_max, f, x, ec_norm)
-# bnds = ((0, 1), ) * len(ct0)
-# constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - 1.}
+# fun = lambda ct_hyp: pred_error(ct_hyp, net, numLevels_max, f, x, ec_real)
+# bnds = ((cellnum_init, cellnun_max), ) * len(ct0)
+# constraint = {'type': 'eq', 'fun': lambda ct_hyp: ct_hyp.sum() - cellnun_max}
 # # res = minimize(fun, ct0, method='SLSQP', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
 # res = minimize(fun, ct0, method='Nelder-Mead', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
 # # res = minimize(fun, ct0, method='trust-constr', bounds=bnds, options={'disp': False, 'maxiter': 1000}, tol=1e-3, constraints=constraint)
@@ -423,30 +437,27 @@ plt.savefig('../figures/one-celltype-static-net/relative-abundance/celltype-abun
 # met_levels, met_leftover_levels = calc_metabolome(x, m2b, m2m_total, numLevels_max)
 # metabolome_pred = met_levels + met_leftover_levels.sum(1) #np.dot(m2m_total, x_full)
 # #metabolome_pred = np.dot(m2m_total, x_full)
-# i_common = np.where(ec_norm > 0)[0]
+# i_common = np.where(ec_real > 0)[0]
 # metabolome_pred_common = metabolome_pred[i_common] #/ np.sum(metabolome_pred[i_common])
-# metabolome_norm_common = ec_norm[i_common] #/ np.sum(metabolome_measured[i_common])
+# metabolome_measured_common = ec_real[i_common] #/ np.sum(metabolome_measured[i_common])
 
 # #### Metabolome comparison
 # fig, ax = plt.subplots()
-# ax.loglog(metabolome_pred_common, metabolome_norm_common, 'ko')
-# ax.plot([1e-5, 1], [1e-5, 1],'k-')
+# ax.loglog(metabolome_pred_common, metabolome_measured_common, 'ko')
+# # ax.plot([1e-5, 1], [1e-5, 1],'k-')
 # ax.set_aspect('equal')
 # ax.set_xlabel('predicted')
 # ax.set_ylabel('experimentally observed')
 # ax.set_title('Extracellular metabolome comparison')
+# plt.show()
 # # fig.savefig('../figures/one-celltype-static-net/ec-pred-correlation-'+figname+'.png', dpi=300.)
 
 # # ic_corr = pearsonr(ic_pred[ic_real>0], ic_real[ic_real>0])[0]
-# ec_corr = pearsonr(metabolome_pred_common, metabolome_norm_common)[0]
+# ec_corr = pearsonr(metabolome_pred_common, metabolome_measured_common)[0]
 # print('-------------------------------------------------------------------------------------------------------------')
 # # print('(Correlation coefficient, P-value) of the correlation between predicted and experimentally measured intracellular metabolome:')
 # # print(pearsonr(ic_pred[ic_real>0], ic_real[ic_real>0]))
 # print('(Correlation coefficient, P-value) of the correlation between predicted and experimentally measured extracellular metabolome:')
-# print(pearsonr(metabolome_pred_common, metabolome_norm_common))
-
-
-
-# # %%
+# print(pearsonr(metabolome_pred_common, metabolome_measured_common))
 
 # %%
